@@ -1,3 +1,4 @@
+---@diagnostic disable: undefined-global
 -- Ожидание загрузки игрока
 if not game:GetService("Players").LocalPlayer then
     game:GetService("Players"):GetPropertyChangedSignal("LocalPlayer"):Wait()
