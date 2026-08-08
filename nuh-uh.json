@@ -1,11 +1,5 @@
 [
     {
-        "key": "none",
-        "robloxName": "WdymGaming",
-        "group": "Coder",
-        "timeTillWorks": "inf"
-    },
-    {
         "key": "EmilyUiGAr]-WZK3-@qEmilyUiDm{a-K=$p-7P",
         "robloxName": "none",
         "group": "Free",
@@ -39,6 +33,18 @@
         "key": "none",
         "robloxName": "Nikitaminercoin",
         "group": "User",
+        "timeTillWorks": "inf"
+    },
+    {
+        "key": "TestingNewGui",
+        "robloxName": "none",
+        "group": "Tester",
+        "timeTillWorks": "20.08.2026"
+    },
+    {
+        "key": "none",
+        "robloxName": "WdymGaming",
+        "group": "Coder",
         "timeTillWorks": "inf"
     }
 ]

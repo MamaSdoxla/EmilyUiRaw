@@ -304,7 +304,7 @@ local GamePlaces = {
 		{ type = "label", text = "Murder Mystery 2" },
 		{ type = "button", text = "VisionHub", cb = function() loadstring(game:HttpGet("https://raw.githubusercontent.com/orialdev/VisionHub/refs/heads/main/main.lua"))() end },
 		{ type = "button", text = "AutoFarm (40coins/4,5min)", cb = function() loadstring(game:HttpGet("https://raw.githubusercontent.com/tsBelrux/mm2/refs/heads/main/keyless.lua"))() end },
-		{ type = "button", text = "FoxnameHub", cb = function() loadstring(game:HttpGet("https://raw.githubusercontent.com/xv3gasx/Murder-Mystery-2/refs/heads/main/Release.lua"))() end },
+		{ type = "button", text = "FoxnameHub", cb = function() loadstring(game:HttpGet("https://foxname.top/loader"))() end },
 	},
 	["95082159892680"] = {
 		{ type = "label", text = "+1 Speed Keyboard Escape" },
