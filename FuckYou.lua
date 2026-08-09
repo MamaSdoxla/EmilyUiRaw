@@ -5320,62 +5320,73 @@ local function initMovementModule(desyncTabs, musicTabs, aimTabs)
 	end
 
 	local function toggleRow(parent, label, key, rebuild)
-		local stateVal = Settings[key] and true or false
+        local stateVal = Settings[key] and true or false
+        local bg = stateVal and Color3.fromRGB(30, 60, 30) or C_REDD
+        local tc = stateVal and C_GRN or C_ROFF
 
-		local bg = stateVal and Color3.fromRGB(30, 60, 30) or C_REDD
-		local tc = stateVal and C_GRN or C_ROFF
+        local b
 
-		local b = mvButton(parent, label .. ": " .. (stateVal and "ON" or "OFF"), function()
-			stateVal = not stateVal
-			Settings[key] = stateVal
+        b = mvButton(parent, label .. ": " .. (stateVal and "ON" or "OFF"), function()
+            stateVal = not stateVal
+            Settings[key] = stateVal
 
-			bg = stateVal and Color3.fromRGB(30, 60, 30) or C_REDD
-			tc = stateVal and C_GRN or C_ROFF
+            bg = stateVal and Color3.fromRGB(30, 60, 30) or C_REDD
+            tc = stateVal and C_GRN or C_ROFF
 
-			b.Text = label .. ": " .. (stateVal and "ON" or "OFF")
-			b.BackgroundColor3 = bg
-			b.TextColor3 = tc
-			setButtonBaseColor(b, bg)
+            if b then
+                b.Text = label .. ": " .. (stateVal and "ON" or "OFF")
+                b.BackgroundColor3 = bg
+                b.TextColor3 = tc
+                setButtonBaseColor(b, bg)
+            end
 
-			saveSettings()
+            saveSettings()
 
-			if rebuild then
-				rebuildMarkers()
-			end
-		end, bg, tc, 26)
+            if rebuild then
+                rebuildMarkers()
+            end
+        end, bg, tc, 26)
 
-		return b
-	end
+        return b
+    end
 
 	------------------------------------------------------------
 	-- TAB: COLORS
 	------------------------------------------------------------
 
 	local function colorSection(parent, title, modeKey, keyA, keyB, keyC)
-		createSection(parent, title)
+        createSection(parent, title)
 
-		local modeBtn = mvButton(parent, "Color Mode: " .. Settings[modeKey], function()
-			local idx = table.find(COLOR_MODES, Settings[modeKey]) or 1
-			Settings[modeKey] = COLOR_MODES[(idx % #COLOR_MODES) + 1]
-			saveSettings()
-			rebuildMarkers()
-			updateVis()
-		end, nil, nil, 26)
+        local updateVis
 
-		local rowA = colorRow(parent, "Color A (R,G,B)", keyA, true)
-		local rowB = colorRow(parent, "Color B (R,G,B)", keyB, true)
-		local rowC = colorRow(parent, "Color C (R,G,B)", keyC, true)
+        local modeBtn = mvButton(parent, "Color Mode: " .. Settings[modeKey], function()
+            local idx = table.find(COLOR_MODES, Settings[modeKey]) or 1
+            Settings[modeKey] = COLOR_MODES[(idx % #COLOR_MODES) + 1]
 
-		updateVis = function()
-			local m = Settings[modeKey]
-			rowA.Visible = (m ~= "Rainbow")
-			rowB.Visible = (m == "TwoWay" or m == "ThreeWay")
-			rowC.Visible = (m == "ThreeWay")
-			modeBtn.Text = "Color Mode: " .. m
-		end
+            saveSettings()
+            rebuildMarkers()
 
-		updateVis()
-	end
+            if updateVis then
+                updateVis()
+            end
+        end, nil, nil, 26)
+
+        local rowA = colorRow(parent, "Color A (R,G,B)", keyA, true)
+        local rowB = colorRow(parent, "Color B (R,G,B)", keyB, true)
+        local rowC = colorRow(parent, "Color C (R,G,B)", keyC, true)
+
+        updateVis = function()
+            local m = Settings[modeKey]
+
+            rowA.Visible = (m ~= "Rainbow")
+            rowB.Visible = (m == "TwoWay" or m == "ThreeWay")
+            rowC.Visible = (m == "ThreeWay")
+
+            modeBtn.Text = "Color Mode: " .. m
+        end
+
+        updateVis()
+    end
 
 	addMovementTab("Colors", function(p)
 		createSection(p, "COLORS")
@@ -5437,23 +5448,36 @@ local function initMovementModule(desyncTabs, musicTabs, aimTabs)
 	end
 
 	local function bindRow(parent, label, key, onSet)
-		local b = mvButton(parent, label .. ": [" .. Keybinds[key] .. "]", function()
-			if movementBindCapture then return end
+        local b
 
-			movementBindCapture = function(name)
-				Keybinds[key] = name
-				b.Text = label .. ": [" .. name .. "]"
-				saveSettings()
+        b = mvButton(parent, label .. ": [" .. Keybinds[key] .. "]", function()
+            if movementBindCapture then return end
 
-				if onSet then onSet() end
-				setStatus("Keybind set: " .. label .. " -> " .. name)
-			end
+            movementBindCapture = function(name)
+                Keybinds[key] = name
 
-			b.Text = label .. ": [press any key]"
-		end, nil, nil, 28)
+                if b then
+                    b.Text = label .. ": [" .. name .. "]"
+                end
 
-		return b
-	end
+                saveSettings()
+
+                if onSet then
+                    onSet()
+                end
+
+                if setStatus then
+                    setStatus("Keybind set: " .. label .. " -> " .. name)
+                end
+            end
+
+            if b then
+                b.Text = label .. ": [press any key]"
+            end
+        end, nil, nil, 28)
+
+        return b
+    end
 
 	addMovementTab("Keybinds", function(p)
 		createSection(p, "KEYBINDS")
