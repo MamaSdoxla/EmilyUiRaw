@@ -28,15 +28,17 @@ local uiImageOpacity = 1    -- 0..1
 local uiBlurSize = 0        -- 0..24
 local uiFitMode = "Fill"
 local uiBackgroundFile = "" -- "" = None
+local uiColor_ToggleOnText = Color3.fromRGB(100, 255, 100)  -- цвет текста "ON"
+local uiColor_ToggleOffText = Color3.fromRGB(255, 100, 100) -- цвет текста "OFF"
 local uiCollapsed = false
 
 local cachedKeyResponse = nil
 local currentKeyData = { group = "Free", daysLeft = "Infinity" }
 local unlocked = false
-local beta = true -- true: только Tester и Coder; false: Free, User, Tester, Coder
+local beta = false -- true: только Tester и Coder; false: Free, User, Tester, Coder
 
 local function notify(title, text)
-	StarterGui:SetCore("SendNotification", {Title = title, Text = text, Duration = 5})
+	StarterGui:SetCore("SendNotification", {Title = title, Text = text, Duration = 15})
 end
 
 notify("Fuck you! v1.2", "To get key goto discord or ask for a permanent one.")
@@ -50,6 +52,24 @@ end
 local ScreenGui = create("ScreenGui", {Name = "FuckYouGui", ResetOnSpawn = false, Parent = LocalPlayer:WaitForChild("PlayerGui")})
 
 local themeElements = { MainWindow = {}, TopBars = {}, SideBars = {}, Texts = {}, Buttons = {}, TextBoxes = {}, FillBars = {}, CustomButtons = {} }
+local moduleToggles = {}  -- {btn, group} — кнопки‑тумблеры модулей в подкладке
+local toggleRegistry = {} -- [кнопка] = function() return состояние end
+local function scaleColor(c, f)
+	return Color3.fromRGB(math.clamp(c.R*255*f,0,255), math.clamp(c.G*255*f,0,255), math.clamp(c.B*255*f,0,255))
+end
+local function paintToggleBtn(btn, on)
+	if on then
+		btn.BackgroundColor3 = scaleColor(uiColor_ToggleOnText, 0.35)
+		btn.TextColor3 = uiColor_ToggleOnText
+	else
+		btn.BackgroundColor3 = scaleColor(uiColor_ToggleOffText, 0.35)
+		btn.TextColor3 = uiColor_ToggleOffText
+	end
+end
+local function registerToggle(btn, getState)
+	toggleRegistry[btn] = getState
+	paintToggleBtn(btn, getState() and true or false)
+end
 local tabs = {}
 local updateTabButtonsTheme, applyTheme
 
@@ -70,14 +90,31 @@ end
 
 applyTheme = function()
 	local trans = 1 - uiGuiOpacity
-	for _, el in ipairs(themeElements.MainWindow) do el.BackgroundColor3 = uiColor_MainWindow; el.BackgroundTransparency = trans end
-	for _, el in ipairs(themeElements.TopBars) do el.BackgroundColor3 = uiColor_TopBar; el.BackgroundTransparency = trans end
-	for _, el in ipairs(themeElements.SideBars) do el.BackgroundColor3 = uiColor_SideBar; el.BackgroundTransparency = trans end
-	for _, el in ipairs(themeElements.Texts) do el.TextColor3 = uiColor_TextColor end
-	for _, el in ipairs(themeElements.Buttons) do el.BackgroundColor3 = uiColor_ButtonColor; el.BackgroundTransparency = trans end
-	for _, el in ipairs(themeElements.CustomButtons) do el.BackgroundTransparency = trans end
-	for _, el in ipairs(themeElements.TextBoxes) do el.BackgroundColor3 = uiColor_TextBoxColor; el.BackgroundTransparency = trans end
-	for _, el in ipairs(themeElements.FillBars) do el.BackgroundColor3 = uiColor_TextColor end
+	local function applyList(key, fn)
+		local alive = {}
+		for _, el in ipairs(themeElements[key]) do
+			if typeof(el) == "Instance" and el.Parent then
+				fn(el)
+				table.insert(alive, el)
+			end
+		end
+		themeElements[key] = alive
+	end
+	applyList("MainWindow", function(el) el.BackgroundColor3 = uiColor_MainWindow; el.BackgroundTransparency = trans end)
+	applyList("TopBars", function(el) el.BackgroundColor3 = uiColor_TopBar; el.BackgroundTransparency = trans end)
+	applyList("SideBars", function(el) el.BackgroundColor3 = uiColor_SideBar; el.BackgroundTransparency = trans end)
+	applyList("Texts", function(el) el.TextColor3 = uiColor_TextColor end)
+	applyList("Buttons", function(el) el.BackgroundColor3 = uiColor_ButtonColor; el.BackgroundTransparency = trans end)
+	applyList("CustomButtons", function(el) el.BackgroundTransparency = trans end)
+	applyList("TextBoxes", function(el) el.BackgroundColor3 = uiColor_TextBoxColor; el.BackgroundTransparency = trans end)
+	applyList("FillBars", function(el) el.BackgroundColor3 = uiColor_TextColor end)
+	for btn, getState in pairs(toggleRegistry) do
+		if typeof(btn) == "Instance" and btn.Parent then
+			paintToggleBtn(btn, getState() and true or false)
+		else
+			toggleRegistry[btn] = nil
+		end
+	end
 	updateTabButtonsTheme()
 end
 
@@ -93,6 +130,8 @@ local function saveConfig()
 		TextColor = {uiColor_TextColor.R, uiColor_TextColor.G, uiColor_TextColor.B},
 		ButtonColor = {uiColor_ButtonColor.R, uiColor_ButtonColor.G, uiColor_ButtonColor.B},
 		TextBoxColor = {uiColor_TextBoxColor.R, uiColor_TextBoxColor.G, uiColor_TextBoxColor.B},
+        ToggleOnColor = {uiColor_ToggleOnText.R, uiColor_ToggleOnText.G, uiColor_ToggleOnText.B},
+        ToggleOffColor = {uiColor_ToggleOffText.R, uiColor_ToggleOffText.G, uiColor_ToggleOffText.B},
 		GuiOpacity = uiGuiOpacity,
 		ImageOpacity = uiImageOpacity,
 		Blur = uiBlurSize,
@@ -234,7 +273,7 @@ updateBlur()
 local TopBar = create("Frame", {Name = "TopBar", Parent = FuckYou, Size = UDim2.new(1, 0, 0, 45), BackgroundColor3 = uiColor_TopBar, BorderSizePixel = 0})
 table.insert(themeElements.TopBars, TopBar)
 
-local Title = create("TextLabel", {Name = "Name", Parent = TopBar, Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, Text = "Fuck you! v1.2", TextColor3 = uiColor_TextColor, TextSize = 14, Font = FONT})
+local Title = create("TextLabel", {Name = "Name", Parent = TopBar, Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, Text = "Fuck you! v1.2", TextColor3 = uiColor_TextColor, TextSize = 13, Font = FONT})
 table.insert(themeElements.Texts, Title)
 
 local function makeTopBtn(symbol, offset)
@@ -242,7 +281,7 @@ local function makeTopBtn(symbol, offset)
 		Name = symbol, Parent = TopBar,
 		Position = UDim2.new(1, -45 * offset, 0, 0), Size = UDim2.new(0, 45, 0, 45),
 		BackgroundColor3 = uiColor_TopBar, BorderColor3 = COL_BORDER,
-		Text = symbol, TextColor3 = uiColor_TextColor, TextSize = 14, Font = FONT
+		Text = symbol, TextColor3 = uiColor_TextColor, TextSize = 13, Font = FONT
 	})
 	table.insert(themeElements.TopBars, b)
 	table.insert(themeElements.Texts, b)
@@ -310,6 +349,11 @@ end
 local tabFrames = {
 	Main = createTabContentFrame("TabMain"),
 	Universal = createTabContentFrame("TabUniversal"),
+	Character = createTabContentFrame("TabCharacter"),
+	Players = createTabContentFrame("TabPlayers"),
+	Visuals = createTabContentFrame("TabVisuals"),
+	Utilities = createTabContentFrame("TabUtilities"),
+	Server = createTabContentFrame("TabServer"),
 	Games = createTabContentFrame("TabGames"),
 	Scripts = createTabContentFrame("TabScripts"),
 	Hubs = createTabContentFrame("TabScriptHubs"),
@@ -319,7 +363,7 @@ local tabFrames = {
 }
 
 local function createSection(parent, text)
-	local lbl = create("TextLabel", {Size = UDim2.new(1, 0, 0, 26), BackgroundTransparency = 1, Text = text, TextColor3 = uiColor_TextColor, TextSize = 14, Font = FONT, Parent = parent})
+	local lbl = create("TextLabel", {Size = UDim2.new(1, 0, 0, 26), BackgroundTransparency = 1, Text = text, TextColor3 = uiColor_TextColor, TextSize = 13, Font = FONT, Parent = parent})
 	table.insert(themeElements.Texts, lbl)
 	return lbl
 end
@@ -332,7 +376,7 @@ end
 
 local function createContentButton(parent, text, callback, customColor)
 	local defaultColor = customColor or uiColor_ButtonColor
-	local btn = create("TextButton", {Size = UDim2.new(1, 0, 0, 30), BackgroundColor3 = defaultColor, BorderColor3 = COL_BORDER, TextColor3 = uiColor_TextColor, Text = text, Font = FONT, TextSize = 13, Parent = parent})
+	local btn = create("TextButton", {Size = UDim2.new(1, 0, 0, 30), BackgroundColor3 = defaultColor, BorderColor3 = COL_BORDER, TextColor3 = uiColor_TextColor, Text = text, Font = FONT, TextSize = 13, BackgroundTransparency = 1 - uiGuiOpacity, Parent = parent})
 	if not customColor then table.insert(themeElements.Buttons, btn) end
 	table.insert(themeElements.Texts, btn)
 	btn.MouseEnter:Connect(function()
@@ -345,7 +389,7 @@ local function createContentButton(parent, text, callback, customColor)
 end
 
 local function createTextBox(parent, placeholder, font)
-	local box = create("TextBox", {BackgroundColor3 = uiColor_TextBoxColor, BorderColor3 = COL_BORDER, TextColor3 = uiColor_TextColor, PlaceholderColor3 = Color3.fromRGB(90, 90, 90), PlaceholderText = placeholder, Text = "", TextSize = 13, Font = font or FONT, ClearTextOnFocus = false, Parent = parent})
+	local box = create("TextBox", {BackgroundColor3 = uiColor_TextBoxColor, BorderColor3 = COL_BORDER, TextColor3 = uiColor_TextColor, PlaceholderColor3 = Color3.fromRGB(90, 90, 90), PlaceholderText = placeholder, Text = "", TextSize = 13, Font = font or FONT, ClearTextOnFocus = false, BackgroundTransparency = 1 - uiGuiOpacity, Parent = parent})
 	table.insert(themeElements.Texts, box)
 	table.insert(themeElements.TextBoxes, box)
 	return box
@@ -363,7 +407,7 @@ table.insert(themeElements.SideBars, UserProfilePanel)
 local UserImage = create("ImageLabel", {Parent = UserProfilePanel, Position = UDim2.new(0, 10, 0, 10), Size = UDim2.new(0, 40, 0, 40), BackgroundTransparency = 1, Image = "rbxthumb://type=AvatarHeadShot&id=" .. LocalPlayer.UserId .. "&w=150&h=150"})
 create("UICorner", {Parent = UserImage, CornerRadius = UDim.new(1, 0)})
 
-create("TextLabel", {Parent = UserProfilePanel, Position = UDim2.new(0, 60, 0, 6), Size = UDim2.new(1, -70, 0, 16), BackgroundTransparency = 1, Text = LocalPlayer.DisplayName, TextColor3 = Color3.fromRGB(255, 255, 255), TextSize = 14, Font = FONT, TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd})
+create("TextLabel", {Parent = UserProfilePanel, Position = UDim2.new(0, 60, 0, 6), Size = UDim2.new(1, -70, 0, 16), BackgroundTransparency = 1, Text = LocalPlayer.DisplayName, TextColor3 = Color3.fromRGB(255, 255, 255), TextSize = 13, Font = FONT, TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd})
 
 local UserKeyTimeLabel = create("TextLabel", {Parent = UserProfilePanel, Position = UDim2.new(0, 60, 0, 22), Size = UDim2.new(1, -70, 0, 14), BackgroundTransparency = 1, Text = "Days left: Inf", TextColor3 = Color3.fromRGB(180, 180, 180), TextSize = 12, Font = FONT, TextXAlignment = Enum.TextXAlignment.Left})
 table.insert(themeElements.Texts, UserKeyTimeLabel)
@@ -413,6 +457,7 @@ local uiStructure = {
 	{ tab = tabFrames.Universal, type = "button", text = "FE Admin Commands", cb = function() loadstring(game:HttpGet("https://raw.githubusercontent.com/lxte/cmd/main/main.lua"))() end },
 	{ tab = tabFrames.Universal, type = "section", text = "For exploiting" },
 	{ tab = tabFrames.Universal, type = "button", text = "Dex Explorer++", cb = function() loadstring(game:HttpGet("https://github.com/AZYsGithub/DexPlusPlus/releases/latest/download/out.lua"))() end },
+    { tab = tabFrames.Universal, type = "button", text = "Cobalt", cb = function() loadstring(game:HttpGet("https://gitlab.com/upio/cobalt/-/releases/permalink/latest/downloads/Cobalt.luau"))() end },
 	{ tab = tabFrames.Universal, type = "button", text = "Rem v1.2", cb = function() loadstring(game:HttpGet("https://e-vil.com/anbu/rem.lua"))() end },
 	{ tab = tabFrames.Universal, type = "button", text = "VEX (better DEX)", cb = function() loadstring(game:HttpGet("https://raw.githubusercontent.com/Vezise/2026/main/Vez/VexExplorer/VEXExplorer.lua"))() end },
 	{ tab = tabFrames.Universal, type = "button", text = "Executor Tester | v2.6", cb = function() loadstring(game:HttpGet("https://raw.githubusercontent.com/GmilerlolYT/ExecutorTester/refs/heads/main/Hi"))() end },
@@ -569,10 +614,10 @@ local function initDesyncModule()
     local C_ROFF = Color3.fromRGB(255, 100, 100)
     local C_REDD = Color3.fromRGB(150, 40, 40)
     local C_WHT = Color3.fromRGB(255, 255, 255)
-    local F_R = Enum.Font.SourceSans
-    local F_B = Enum.Font.SourceSansBold
-    local F_S = Enum.Font.SourceSansSemibold
-    local F_I = Enum.Font.SourceSansItalic
+    local F_R = FONT
+    local F_B = FONT
+    local F_S = FONT
+    local F_I = FONT
     local FOLDER = "EmilyUi/Animator"
     local FILE_DESYNC = FOLDER .. "/animations_saved.json"
     local FILE_R6 = FOLDER .. "/AnimationManagerJsonR6.json"
@@ -753,7 +798,7 @@ local function initDesyncModule()
         IsDesynced = false
         if DesyncToggleBtn then
             DesyncToggleBtn.Text = "Desync: OFF"
-            DesyncToggleBtn.TextColor3 = C_ROFF
+            paintToggleBtn(DesyncToggleBtn, false)
         end
         OffsetPos = Vector3.new(0, 0, 0)
         OffsetRot = Vector3.new(0, 0, 0)
@@ -821,7 +866,7 @@ local function initDesyncModule()
         IsDesynced = true
         if DesyncToggleBtn then
             DesyncToggleBtn.Text = "Desync: ON"
-            DesyncToggleBtn.TextColor3 = C_GRN
+            paintToggleBtn(DesyncToggleBtn, true)
         end
         realCF = hrp.CFrame
         DesyncLoop =
@@ -842,11 +887,13 @@ local function initDesyncModule()
                     end
                 end
                 hrp.CFrame = dCF
+
                 if VisualChar and VisualChar.Parent then
-                    for op, r in pairs(partMap) do
-                        local vp = rel[op]
-                        if vp and vp.Parent then
-                            vp.CFrame = dCF * r
+                    for realPart, visualPart in pairs(partMap) do
+                        local relativeCFrame = rel[realPart]
+
+                        if relativeCFrame and visualPart and visualPart.Parent then
+                            visualPart.CFrame = dCF * relativeCFrame
                         end
                     end
                 end
@@ -1060,7 +1107,7 @@ local function initDesyncModule()
         l.Size = sz
         l.Position = pos
         l.Font = font or F_S
-        l.TextSize = ts or 16
+        l.TextSize = 13
         l.TextXAlignment = Enum.TextXAlignment.Left
         l.TextColor3 = uiColor_TextColor
         l.BackgroundTransparency = 1
@@ -1074,7 +1121,7 @@ local function initDesyncModule()
         b.Size = sz
         b.Position = pos
         b.Font = F_R
-        b.TextSize = ts or 14
+        b.TextSize = ts or 16
         b.BackgroundColor3 = uiColor_TextBoxColor
         b.TextColor3 = uiColor_TextColor
         b.PlaceholderColor3 = Color3.fromRGB(90, 90, 90)
@@ -1093,7 +1140,7 @@ local function initDesyncModule()
         b.Size = sz
         b.Position = pos
         b.Font = font or F_B
-        b.TextSize = ts or 14
+        b.TextSize = 13
         b.BackgroundColor3 = uiColor_ButtonColor
         b.TextColor3 = uiColor_TextColor
         b.BorderSizePixel = 0
@@ -1165,8 +1212,8 @@ local function initDesyncModule()
         PositionInput = mkBox(inner, "0,0,0", UDim2.new(1, -24, 0, 24), UDim2.new(0, 12, 0, 74), 20)
         local applyBtn = mkBtn(inner, "Apply Changes", UDim2.new(1, -24, 0, 28), UDim2.new(0, 12, 0, 110), F_B, 20)
         DesyncToggleBtn =
-            mkBtn(inner, "Desync: OFF", UDim2.new(0.5, -16, 0, 28), UDim2.new(0, 12, 0, 150), F_B, 15, false)
-        DesyncToggleBtn.TextColor3 = C_ROFF
+		    mkBtn(inner, "Desync: OFF", UDim2.new(0.5, -16, 0, 28), UDim2.new(0, 12, 0, 150), F_B, 15, false)
+	    registerToggle(DesyncToggleBtn, function() return IsDesynced end)
         local reloadBtn = mkBtn(inner, "Desync Reload", UDim2.new(0.5, -16, 0, 28), UDim2.new(0.5, 4, 0, 150), F_B, 14)
         applyBtn.MouseButton1Click:Connect(
             function()
@@ -1187,29 +1234,6 @@ local function initDesyncModule()
             end
         )
         reloadBtn.MouseButton1Click:Connect(reloadDesync)
-        local desyncSectionToggleBtn =
-            mkBtn(inner, "Main Toggle: OFF", UDim2.new(1, -24, 0, 28), UDim2.new(0, 12, 0, 190), F_B, 16, "no")
-        desyncSectionToggleBtn.BackgroundColor3 = Color3.fromRGB(70, 40, 40)
-        desyncSectionToggleBtn.TextColor3 = C_ROFF
-        desyncSectionToggleBtn.MouseButton1Click:Connect(
-            function()
-                DesyncSectionEnabled = not DesyncSectionEnabled
-                if DesyncSectionEnabled then
-                    desyncSectionToggleBtn.Text = "Main Toggle: ON"
-                    desyncSectionToggleBtn.TextColor3 = C_GRN
-                    desyncSectionToggleBtn.BackgroundColor3 = Color3.fromRGB(40, 70, 40)
-                else
-                    desyncSectionToggleBtn.Text = "Main Toggle: OFF"
-                    desyncSectionToggleBtn.TextColor3 = C_ROFF
-                    desyncSectionToggleBtn.BackgroundColor3 = Color3.fromRGB(70, 40, 40)
-                    if IsDesynced then
-                        stopDesync()
-                    end
-                    stopDesyncAnim()
-                    stopNormAnim()
-                end
-            end
-        )
     end
     --// 2. ANIM EDITOR
     local function buildEditorTab(parent)
@@ -1277,7 +1301,7 @@ local function initDesyncModule()
                         TextColor3 = uiColor_TextColor,
                         Text = string.format("[%d] P:%s O:%s T:%s", i, fd.pos, fd.rot, tostring(fd.time)),
                         Font = F_R,
-                        TextSize = 11,
+                        TextSize = 13,
                         BorderSizePixel = 0
                     }
                 )
@@ -1948,7 +1972,7 @@ local function initDesyncModule()
                                     TextColor3 = uiColor_TextColor,
                                     Text = n,
                                     Font = F_R,
-                                    TextSize = 14,
+                                    TextSize = 13,
                                     BorderSizePixel = 0
                                 }
                             )
@@ -2486,18 +2510,826 @@ local function initDesyncModule()
             )
         end
     )
+
+    local DesyncSidebarToggle = create("TextButton", {
+		Name = "MToggle_Desync", Parent = MenuInsided,
+		Size = UDim2.new(1, 0, 0, 40), LayoutOrder = 190, Visible = false,
+		BorderColor3 = COL_BORDER, Text = "Desync: OFF", Font = FONT, TextSize = 12, TextWrapped = true,
+		BackgroundTransparency = 1 - uiGuiOpacity,
+	})
+	table.insert(themeElements.CustomButtons, DesyncSidebarToggle)
+	table.insert(moduleToggles, {btn = DesyncSidebarToggle, group = "Desync"})
+	registerToggle(DesyncSidebarToggle, function() return DesyncSectionEnabled end)
+	local function refreshDesyncToggleText()
+		DesyncSidebarToggle.Text = "Desync: " .. (DesyncSectionEnabled and "ON" or "OFF")
+		paintToggleBtn(DesyncSidebarToggle, DesyncSectionEnabled)
+	end
+	refreshDesyncToggleText()
+	DesyncSidebarToggle.MouseButton1Click:Connect(function()
+		DesyncSectionEnabled = not DesyncSectionEnabled
+		if not DesyncSectionEnabled then
+			if IsDesynced then stopDesync() end
+			stopDesyncAnim()
+			stopNormAnim()
+		end
+		refreshDesyncToggleText()
+	end)
+
     return desyncTabs
 end
 local desyncTabs = initDesyncModule()
+
+-- =========================================================
+-- ========== CHARACTER / PLAYERS / VISUALS / UTILS / SERVER
+-- =========================================================
+do
+local TeleportService = game:GetService("TeleportService")
+local LightingService = game:GetService("Lighting")
+local StatsService = game:GetService("Stats")
+local Marketplace = game:GetService("MarketplaceService")
+
+local function getMyChar() return LocalPlayer.Character end
+local function getMyHum() local c = getMyChar() return c and c:FindFirstChildOfClass("Humanoid") end
+local function getMyRoot() local c = getMyChar() return c and c:FindFirstChild("HumanoidRootPart") end
+
+------------------------------------------------------------
+-- UI HELPERS
+------------------------------------------------------------
+local function extraSlider(parent, labelText, min, max, decimals, default, getval, onval, fmt)
+	local container = create("Frame", {Size = UDim2.new(1, 0, 0, 36), BackgroundTransparency = 1, Parent = parent})
+	local label = create("TextLabel", {Size = UDim2.new(0.45, 0, 1, 0), BackgroundTransparency = 1, Text = labelText, TextColor3 = uiColor_TextColor, TextSize = 13, Font = FONT, TextXAlignment = Enum.TextXAlignment.Left, Parent = container})
+	table.insert(themeElements.Texts, label)
+	local rightEnd = default and 0.85 or 0.99
+	local valLabel = create("TextLabel", {Size = UDim2.new(rightEnd - 0.48, 0, 0, 14), Position = UDim2.new(0.48, 0, 0.05, 0), BackgroundTransparency = 1, Text = fmt(getval()), TextColor3 = uiColor_TextColor, TextSize = 13, Font = FONT, TextXAlignment = Enum.TextXAlignment.Right, Parent = container})
+	table.insert(themeElements.Texts, valLabel)
+	local track = create("TextButton", {Size = UDim2.new(rightEnd - 0.48, 0, 0, 10), Position = UDim2.new(0.48, 0, 0.55, 0), BackgroundColor3 = uiColor_TextBoxColor, BorderColor3 = COL_BORDER, BackgroundTransparency = 1 - uiGuiOpacity, Text = "", Parent = container})
+	table.insert(themeElements.TextBoxes, track)
+	local fill = create("Frame", {Size = UDim2.new(math.clamp((getval() - min) / (max - min), 0, 1), 0, 1, 0), BackgroundColor3 = uiColor_TextColor, BorderSizePixel = 0, Parent = track})
+	table.insert(themeElements.FillBars, fill)
+	local dragging = false
+	local function setFromX(x)
+		local rel = math.clamp((x - track.AbsolutePosition.X) / track.AbsoluteSize.X, 0, 1)
+		local raw = min + (max - min) * rel
+		local v
+		if decimals > 0 then
+			local step = 10 ^ (-decimals)
+			v = math.floor(raw / step + 0.5) * step
+		else
+			v = math.floor(raw + 0.5)
+		end
+		v = math.clamp(v, min, max)
+		onval(v)
+		fill.Size = UDim2.new(math.clamp((v - min) / (max - min), 0, 1), 0, 1, 0)
+		valLabel.Text = fmt(v)
+	end
+	track.MouseButton1Down:Connect(function(x)
+		dragging = true
+		setFromX(x)
+	end)
+	UserInputService.InputChanged:Connect(function(input)
+		if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then setFromX(input.Position.X) end
+	end)
+	UserInputService.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end
+	end)
+	if default then
+		local defBtn = create("TextButton", {Size = UDim2.new(0.13, 0, 0.7, 0), Position = UDim2.new(0.86, 0, 0.15, 0), BackgroundColor3 = uiColor_ButtonColor, BorderColor3 = COL_BORDER, BackgroundTransparency = 1 - uiGuiOpacity, TextColor3 = uiColor_TextColor, Text = "Default", Font = FONT, TextSize = 10, Parent = container})
+		table.insert(themeElements.Buttons, defBtn)
+		table.insert(themeElements.Texts, defBtn)
+		defBtn.MouseButton1Click:Connect(function()
+			local v = default
+			onval(v)
+			fill.Size = UDim2.new(math.clamp((v - min) / (max - min), 0, 1), 0, 1, 0)
+			valLabel.Text = fmt(v)
+		end)
+	end
+	return container
+end
+
+local function extraToggle(parent, labelText, initial, callback)
+	local state = initial and true or false
+	local btn = create("TextButton", {Size = UDim2.new(1, 0, 0, 30), BackgroundColor3 = uiColor_ButtonColor, BorderColor3 = COL_BORDER, BackgroundTransparency = 1 - uiGuiOpacity, TextColor3 = uiColor_TextColor, Text = "", Font = FONT, TextSize = 13, Parent = parent})
+	table.insert(themeElements.CustomButtons, btn)
+	table.insert(themeElements.Texts, btn)
+	local function paint()
+		btn.Text = labelText .. ": " .. (state and "ON" or "OFF")
+		paintToggleBtn(btn, state)
+	end
+	paint()
+	registerToggle(btn, function() return state end)
+	btn.MouseButton1Click:Connect(function()
+		state = not state
+		paint()
+		if callback then callback(state) end
+	end)
+	return btn
+end
+
+local function extraDropdown(parent, labelText, options, getcur, onselect)
+	local container = create("Frame", {Size = UDim2.new(1, 0, 0, 36), BackgroundTransparency = 1, Parent = parent})
+	local label = create("TextLabel", {Size = UDim2.new(0.45, 0, 1, 0), BackgroundTransparency = 1, Text = labelText, TextColor3 = uiColor_TextColor, TextSize = 13, Font = FONT, TextXAlignment = Enum.TextXAlignment.Left, Parent = container})
+	table.insert(themeElements.Texts, label)
+	local btn = createContentButton(container, labelText .. ": " .. getcur(), function() end)
+	btn.Size = UDim2.new(0.5, 0, 0.8, 0)
+	btn.Position = UDim2.new(0.48, 0, 0.1, 0)
+	btn.TextSize = 12
+	local list = create("ScrollingFrame", {Parent = container, Size = UDim2.new(0.5, 0, 0, 110), Position = UDim2.new(0.48, 0, 0.95, 0), BackgroundColor3 = uiColor_TextBoxColor, BorderColor3 = COL_BORDER, ScrollBarThickness = 4, CanvasSize = UDim2.new(0, 0, 0, 0), Visible = false, ZIndex = 25})
+	table.insert(themeElements.TextBoxes, list)
+	create("UIListLayout", {Parent = list, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 2)})
+	btn.MouseButton1Click:Connect(function()
+		if list.Visible then list.Visible = false return end
+		for _, ch in ipairs(list:GetChildren()) do if ch:IsA("TextButton") then ch:Destroy() end end
+		for _, opt in ipairs(options) do
+			local ob = createContentButton(list, opt, function()
+				onselect(opt)
+				list.Visible = false
+				btn.Text = labelText .. ": " .. getcur()
+			end)
+			ob.Size = UDim2.new(1, -4, 0, 24)
+			ob.ZIndex = 26
+			ob.TextSize = 12
+		end
+		list.CanvasSize = UDim2.new(0, 0, 0, #options * 26 + 4)
+		list.Visible = true
+	end)
+end
+
+local function extraColorInput(parent, labelText, getcol, oncol)
+	local container = create("Frame", {Size = UDim2.new(1, 0, 0, 36), BackgroundTransparency = 1, Parent = parent})
+	local label = create("TextLabel", {Size = UDim2.new(0.45, 0, 1, 0), BackgroundTransparency = 1, Text = labelText, TextColor3 = uiColor_TextColor, TextSize = 13, Font = FONT, TextXAlignment = Enum.TextXAlignment.Left, Parent = container})
+	table.insert(themeElements.Texts, label)
+	local c = getcol()
+	local box = createTextBox(container, "R,G,B", FONT)
+	box.Size = UDim2.new(0.5, 0, 0.8, 0)
+	box.Position = UDim2.new(0.48, 0, 0.1, 0)
+	box.TextSize = 12
+	box.Text = math.floor(c.R * 255) .. ", " .. math.floor(c.G * 255) .. ", " .. math.floor(c.B * 255)
+	box.FocusLost:Connect(function()
+		local r, g, b = box.Text:match("(%d+)%s*,%s*(%d+)%s*,%s*(%d+)")
+		if r and g and b then
+			oncol(Color3.fromRGB(math.clamp(tonumber(r), 0, 255), math.clamp(tonumber(g), 0, 255), math.clamp(tonumber(b), 0, 255)))
+		else
+			box.Text = "Invalid!"
+		end
+	end)
+	return container
+end
+
+------------------------------------------------------------
+-- 1) CHARACTER
+------------------------------------------------------------
+local CharSettings = {Speed = 16, Jump = 50, Gravity = 196.2}
+local infJumpConn, afkConn = nil, nil
+
+local function applyCharStats()
+	local h = getMyHum()
+	if h then
+		pcall(function() h.WalkSpeed = CharSettings.Speed end)
+		pcall(function() h.UseJumpPower = true h.JumpPower = CharSettings.Jump end)
+	end
+	pcall(function() workspace.Gravity = CharSettings.Gravity end)
+end
+
+local function setInfiniteJump(on)
+	if on and not infJumpConn then
+		infJumpConn = UserInputService.JumpRequest:Connect(function()
+			local h = getMyHum()
+			if h then h:ChangeState(Enum.HumanoidStateType.Jumping) end
+		end)
+	elseif not on and infJumpConn then
+		infJumpConn:Disconnect()
+		infJumpConn = nil
+	end
+end
+
+local function setAntiAFK(on)
+	if on and not afkConn then
+		afkConn = LocalPlayer.Idled:Connect(function()
+			pcall(function()
+				local VirtualUser = game:GetService("VirtualUser")
+				VirtualUser:CaptureController()
+				VirtualUser:ClickButton2(Vector2.new())
+			end)
+		end)
+	elseif not on and afkConn then
+		afkConn:Disconnect()
+		afkConn = nil
+	end
+end
+
+createSection(tabFrames.Character, "Character")
+extraSlider(tabFrames.Character, "Speed", 1, 500, 0, 16,
+	function() return CharSettings.Speed end,
+	function(v) CharSettings.Speed = v applyCharStats() end,
+	function(v) return tostring(v) end)
+extraSlider(tabFrames.Character, "Jump", 1, 500, 0, 50,
+	function() return CharSettings.Jump end,
+	function(v) CharSettings.Jump = v applyCharStats() end,
+	function(v) return tostring(v) end)
+extraSlider(tabFrames.Character, "Gravity", 0, 3000, 1, 196.2,
+	function() return CharSettings.Gravity end,
+	function(v) CharSettings.Gravity = v applyCharStats() end,
+	function(v) return string.format("%.1f", v) end)
+extraToggle(tabFrames.Character, "Infinite Jump", false, setInfiniteJump)
+extraToggle(tabFrames.Character, "Anti-AFK", false, setAntiAFK)
+
+LocalPlayer.CharacterAdded:Connect(function()
+	task.wait(0.1)
+	applyCharStats()
+end)
+
+------------------------------------------------------------
+-- 2) PLAYERS
+------------------------------------------------------------
+local hiddenPlayers = {}
+local markedPlayers = {}
+local spectateTarget = nil
+local playerCards = {}
+local refreshPlayersList
+
+local function applyMark(plr, on)
+	local char = plr.Character
+	if not char then return end
+	local old = char:FindFirstChild("FY_Mark")
+	if old then old:Destroy() end
+	if on then
+		local hl = Instance.new("Highlight")
+		hl.Name = "FY_Mark"
+		hl.FillColor = Color3.fromRGB(255, 80, 80)
+		hl.FillTransparency = 0.6
+		hl.OutlineColor = Color3.fromRGB(255, 255, 255)
+		hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+		hl.Parent = char
+	end
+end
+
+local function updateViewButtons()
+	for plr, cardData in pairs(playerCards) do
+		if cardData.ViewBtn then cardData.ViewBtn.Text = (spectateTarget == plr) and "Stop" or "View" end
+	end
+end
+
+local function stopSpectate()
+	spectateTarget = nil
+	local h = getMyHum()
+	if h then workspace.CurrentCamera.CameraSubject = h end
+	updateViewButtons()
+end
+
+local function startSpectate(plr)
+	spectateTarget = plr
+	local h = plr.Character and plr.Character:FindFirstChildOfClass("Humanoid")
+	if h then workspace.CurrentCamera.CameraSubject = h end
+	updateViewButtons()
+end
+
+local function gotoPlayer(plr)
+	local r = getMyRoot()
+	local t = plr.Character and plr.Character:FindFirstChild("HumanoidRootPart")
+	if r and t then
+		r.CFrame = t.CFrame + Vector3.new(3, 0, 0)
+		notify("Players", "Teleported to " .. plr.Name)
+	else
+		notify("Players", "Target unavailable")
+	end
+end
+
+createSection(tabFrames.Players, "Players")
+local pStopBtn = createContentButton(tabFrames.Players, "Stop Spectating", function() stopSpectate() end)
+pStopBtn.LayoutOrder = -3
+local pRefreshBtn = createContentButton(tabFrames.Players, "Refresh List", function() refreshPlayersList() end)
+pRefreshBtn.LayoutOrder = -2
+local pUnhideBtn = createContentButton(tabFrames.Players, "Unhide All", function() hiddenPlayers = {} refreshPlayersList() end)
+pUnhideBtn.LayoutOrder = -1
+
+local function buildPlayerCard(plr)
+	-- FIX: плашка полностью прозрачная (не видна), кнопки берут прозрачность темы
+	local card = create("Frame", {Name = "PlayerCard", Parent = tabFrames.Players, LayoutOrder = 1, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, BorderSizePixel = 0})
+	create("UIListLayout", {Parent = card, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 6)})
+	create("UIPadding", {Parent = card, PaddingTop = UDim.new(0, 8), PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 8), PaddingBottom = UDim.new(0, 8)})
+
+	local header = create("Frame", {Parent = card, Size = UDim2.new(1, 0, 0, 44), BackgroundTransparency = 1})
+	local avatar = create("ImageLabel", {Parent = header, Position = UDim2.new(0, 0, 0, 2), Size = UDim2.new(0, 40, 0, 40), BackgroundTransparency = 1, Image = "rbxthumb://type=AvatarHeadShot&id=" .. plr.UserId .. "&w=150&h=150"})
+	create("UICorner", {Parent = avatar, CornerRadius = UDim.new(1, 0)})
+	create("TextLabel", {Parent = header, Position = UDim2.new(0, 48, 0, 3), Size = UDim2.new(0.55, -48, 0, 18), BackgroundTransparency = 1, Text = plr.DisplayName, TextColor3 = Color3.fromRGB(255, 255, 255), TextSize = 13, Font = FONT, TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd})
+	create("TextLabel", {Parent = header, Position = UDim2.new(0, 48, 0, 23), Size = UDim2.new(0.55, -48, 0, 16), BackgroundTransparency = 1, Text = "@" .. plr.Name, TextColor3 = Color3.fromRGB(140, 140, 140), TextSize = 11, Font = FONT, TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd})
+	local distL = create("TextLabel", {Parent = header, Position = UDim2.new(0.6, 0, 0, 6), Size = UDim2.new(0.4, 0, 0, 16), BackgroundTransparency = 1, Text = "--", TextColor3 = Color3.fromRGB(160, 160, 160), TextSize = 11, Font = FONT, TextXAlignment = Enum.TextXAlignment.Right})
+
+	local row = create("Frame", {Parent = card, Size = UDim2.new(1, 0, 0, 28), BackgroundTransparency = 1})
+	local function cardBtn(text, i)
+		local b = create("TextButton", {Parent = row, Size = UDim2.new(0.2, -4, 1, 0), Position = UDim2.new(0.2 * i, 0, 0, 0), BackgroundColor3 = uiColor_ButtonColor, BorderColor3 = COL_BORDER, BackgroundTransparency = 1 - uiGuiOpacity, TextColor3 = uiColor_TextColor, Text = text, Font = FONT, TextSize = 11, TextWrapped = true})
+		table.insert(themeElements.Buttons, b)
+		table.insert(themeElements.Texts, b)
+		return b
+	end
+	local gotoB = cardBtn("Goto", 0)
+	local viewB = cardBtn("View", 1)
+	local hideB = cardBtn("Hide", 2)
+	local markB = cardBtn(markedPlayers[plr] and "Unmark" or "Mark", 3)
+	local infoB = cardBtn("Info", 4)
+
+	local infoF = create("Frame", {Parent = card, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, Visible = false})
+	create("UIListLayout", {Parent = infoF, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 2)})
+	local function infoRow(t)
+		local l = create("TextLabel", {Parent = infoF, Size = UDim2.new(1, 0, 0, 16), BackgroundTransparency = 1, Text = t, TextColor3 = uiColor_TextColor, TextSize = 12, Font = FONT, TextXAlignment = Enum.TextXAlignment.Left})
+		table.insert(themeElements.Texts, l)
+		return l
+	end
+	local idL = infoRow("User ID: " .. plr.UserId)
+	local ageL = infoRow("Account Age: " .. tostring(plr.AccountAge) .. " days")
+	local teamL = infoRow("Team: --")
+	local rigL = infoRow("Rig: --")
+	local hpL = infoRow("Health: --")
+	local wsL = infoRow("Walk speed: --")
+	local dL = infoRow("Distance: --")
+	local posL = infoRow("Position: --")
+
+	local function updateCard()
+		local myRoot = getMyRoot()
+		local tRoot = plr.Character and plr.Character:FindFirstChild("HumanoidRootPart")
+		local dist = nil
+		if myRoot and tRoot then dist = math.floor((tRoot.Position - myRoot.Position).Magnitude) end
+		distL.Text = dist and (dist .. " studs") or "--"
+		if infoF.Visible then
+			local h = plr.Character and plr.Character:FindFirstChildOfClass("Humanoid")
+			idL.Text = "User ID: " .. plr.UserId
+			ageL.Text = "Account Age: " .. tostring(plr.AccountAge) .. " days"
+			teamL.Text = "Team: " .. (plr.Team and plr.Team.Name or "None")
+			local rig = "None"
+			if plr.Character then
+				if plr.Character:FindFirstChild("LeftHand") or plr.Character:FindFirstChild("UpperTorso") then rig = "R15"
+				elseif plr.Character:FindFirstChild("Torso") then rig = "R6" end
+			end
+			rigL.Text = "Rig: " .. rig
+			if h then
+				hpL.Text = "Health: " .. math.max(0, math.floor(h.Health)) .. " / " .. math.floor(h.MaxHealth)
+				wsL.Text = "Walk speed: " .. math.floor(h.WalkSpeed)
+			else
+				hpL.Text = "Health: --"
+				wsL.Text = "Walk speed: --"
+			end
+			dL.Text = dist and ("Distance: " .. dist .. " studs") or "Distance: --"
+			posL.Text = tRoot and ("Position: " .. math.floor(tRoot.Position.X) .. ", " .. math.floor(tRoot.Position.Y) .. ", " .. math.floor(tRoot.Position.Z)) or "Position: --"
+		end
+	end
+
+	gotoB.MouseButton1Click:Connect(function() gotoPlayer(plr) end)
+	viewB.MouseButton1Click:Connect(function()
+		if spectateTarget == plr then stopSpectate() else startSpectate(plr) end
+	end)
+	hideB.MouseButton1Click:Connect(function()
+		hiddenPlayers[plr] = true
+		refreshPlayersList()
+	end)
+	markB.MouseButton1Click:Connect(function()
+		markedPlayers[plr] = not markedPlayers[plr]
+		applyMark(plr, markedPlayers[plr])
+		markB.Text = markedPlayers[plr] and "Unmark" or "Mark"
+	end)
+	infoB.MouseButton1Click:Connect(function()
+		infoF.Visible = not infoF.Visible
+		infoB.Text = infoF.Visible and "Close" or "Info"
+		if infoF.Visible then updateCard() end
+	end)
+
+	playerCards[plr] = {ViewBtn = viewB, Update = updateCard}
+	updateCard()
+end
+
+refreshPlayersList = function()
+	for _, ch in ipairs(tabFrames.Players:GetChildren()) do
+		if ch.Name == "PlayerCard" then ch:Destroy() end
+	end
+	playerCards = {}
+	for _, plr in ipairs(Players:GetPlayers()) do
+		if plr ~= LocalPlayer and not hiddenPlayers[plr] then
+			buildPlayerCard(plr)
+		end
+	end
+	updateViewButtons()
+end
+refreshPlayersList()
+
+Players.PlayerRemoving:Connect(function(plr)
+	hiddenPlayers[plr] = nil
+	markedPlayers[plr] = nil
+	if spectateTarget == plr then stopSpectate() end
+	refreshPlayersList()
+end)
+Players.PlayerAdded:Connect(function()
+	task.wait(1)
+	refreshPlayersList()
+end)
+local function hookPlayerChar(plr)
+	plr.CharacterAdded:Connect(function(char)
+		task.wait(0.1)
+		if markedPlayers[plr] then applyMark(plr, true) end
+		if spectateTarget == plr then
+			local h = char:FindFirstChildOfClass("Humanoid")
+			if h then workspace.CurrentCamera.CameraSubject = h end
+		end
+	end)
+end
+for _, plr in ipairs(Players:GetPlayers()) do hookPlayerChar(plr) end
+Players.PlayerAdded:Connect(hookPlayerChar)
+
+task.spawn(function()
+	while true do
+		task.wait(0.5)
+		if spectateTarget then
+			local h = spectateTarget.Character and spectateTarget.Character:FindFirstChildOfClass("Humanoid")
+			if h and h.Health > 0 then
+				workspace.CurrentCamera.CameraSubject = h
+			else
+				stopSpectate()
+			end
+		end
+		for plr, cardData in pairs(playerCards) do
+			if plr.Parent then cardData.Update() end
+		end
+	end
+end)
+
+------------------------------------------------------------
+-- 3) VISUALS
+------------------------------------------------------------
+local VisualSettings = {FOV = 70, DoF = 0, Saturation = 100, Contrast = 100, AspectH = 100, AspectV = 100}
+local TrailSettings = {
+	Enabled = false,
+	Mode = "Solid",
+	Source = "All",
+	ColorA = Color3.fromRGB(255, 255, 255),
+	ColorB = Color3.fromRGB(80, 255, 120),
+	ColorC = Color3.fromRGB(255, 170, 0),
+	Length = 0.6,
+	FadeSpeed = 1,
+	ColorSpeed = 1,
+}
+local crosshairGui = nil
+local activeTrails = {}
+local updateTrailVis
+
+local function setCrosshair(on)
+	if on and not crosshairGui then
+		crosshairGui = create("ScreenGui", {Name = "FYCrosshair", ResetOnSpawn = false, IgnoreGuiInset = true, Parent = LocalPlayer:WaitForChild("PlayerGui")})
+		local geo = {{2, 8, 0, -9}, {2, 8, 0, 9}, {8, 2, -9, 0}, {8, 2, 9, 0}}
+		for _, g in ipairs(geo) do
+			local f = create("Frame", {Parent = crosshairGui, AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.new(0, g[1], 0, g[2]), Position = UDim2.new(0.5, g[3], 0.5, g[4]), BackgroundColor3 = uiColor_TextColor, BorderSizePixel = 0})
+			table.insert(themeElements.FillBars, f)
+		end
+	elseif not on and crosshairGui then
+		crosshairGui:Destroy()
+		crosshairGui = nil
+	end
+end
+
+local function applyFOV(v)
+	VisualSettings.FOV = v
+	pcall(function() workspace.CurrentCamera.FieldOfView = v end)
+end
+
+--// Aspect Ratio: независимое сжатие осей камеры (100% = выключено)
+local aspectConn = nil
+local function updateAspectLoop()
+	if aspectConn then aspectConn:Disconnect() aspectConn = nil end
+	if VisualSettings.AspectH >= 100 and VisualSettings.AspectV >= 100 then return end
+	aspectConn = RunService.RenderStepped:Connect(function()
+		local cam = workspace.CurrentCamera
+		local h = VisualSettings.AspectH / 100
+		local v = VisualSettings.AspectV / 100
+		cam.CFrame = cam.CFrame * CFrame.new(0, 0, 0, h, 0, 0, 0, v, 0, 0, 0, 1)
+	end)
+end
+
+local fullbrightOn = false
+local fbSaved = nil
+local function setFullbright(on)
+	local L = LightingService
+	if on and not fullbrightOn then
+		fbSaved = {Brightness = L.Brightness, ClockTime = L.ClockTime, FogEnd = L.FogEnd, GlobalShadows = L.GlobalShadows, Ambient = L.Ambient, OutdoorAmbient = L.OutdoorAmbient}
+		fullbrightOn = true
+		L.Brightness = 2
+		L.ClockTime = 14
+		L.FogEnd = 100000
+		L.GlobalShadows = false
+		L.Ambient = Color3.fromRGB(180, 180, 180)
+		L.OutdoorAmbient = Color3.fromRGB(180, 180, 180)
+	elseif not on and fullbrightOn then
+		fullbrightOn = false
+		if fbSaved then
+			for k, v in pairs(fbSaved) do L[k] = v end
+			fbSaved = nil
+		end
+	end
+end
+
+--// Trails: выбор источника (у Trail нет свойства Material, поэтому его нет)
+local TRAIL_PARTS = {
+	Body = {"HumanoidRootPart", "Torso", "UpperTorso", "LowerTorso"},
+	Arms = {"LeftHand", "RightHand", "Left Arm", "Right Arm"},
+	Legs = {"LeftFoot", "RightFoot", "Left Leg", "Right Leg"},
+}
+local function getTrailPartNames(source)
+	local out = {}
+	local function add(list)
+		for _, n in ipairs(list) do table.insert(out, n) end
+	end
+	if source == "All" then
+		add(TRAIL_PARTS.Body) add(TRAIL_PARTS.Arms) add(TRAIL_PARTS.Legs)
+	elseif source == "Legs+Arms" then
+		add(TRAIL_PARTS.Arms) add(TRAIL_PARTS.Legs)
+	elseif TRAIL_PARTS[source] then
+		add(TRAIL_PARTS[source])
+	end
+	return out
+end
+
+local function cycle3(a, b, c, t)
+	t = t % 1
+	if t < 1 / 3 then return a:Lerp(b, t * 3)
+	elseif t < 2 / 3 then return b:Lerp(c, (t - 1 / 3) * 3)
+	end
+	return c:Lerp(a, (t - 2 / 3) * 3)
+end
+local function trailColorAt(t)
+	local mode = TrailSettings.Mode
+	local tt = t * TrailSettings.ColorSpeed
+	if mode == "TwoWay" then
+		return TrailSettings.ColorA:Lerp(TrailSettings.ColorB, (math.sin(tt * 1.6) + 1) / 2)
+	elseif mode == "ThreeWay" then
+		return cycle3(TrailSettings.ColorA, TrailSettings.ColorB, TrailSettings.ColorC, tt * 0.25)
+	elseif mode == "Rainbow" then
+		return Color3.fromHSV((tt * 0.12) % 1, 1, 1)
+	end
+	return TrailSettings.ColorA
+end
+
+local function buildTrails(char)
+	if not char then return end
+	for _, d in ipairs(char:GetDescendants()) do
+		if d.Name == "FY_Trail" or d.Name == "FY_TrailAtt0" or d.Name == "FY_TrailAtt1" then d:Destroy() end
+	end
+	activeTrails = {}
+	if not TrailSettings.Enabled then return end
+	local fadePos = math.clamp(1 / TrailSettings.FadeSpeed, 0.05, 1)
+	local ns
+	if fadePos >= 1 then
+		ns = NumberSequence.new({NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(1, 1)})
+	else
+		ns = NumberSequence.new({NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(fadePos, 1), NumberSequenceKeypoint.new(1, 1)})
+	end
+	for _, pn in ipairs(getTrailPartNames(TrailSettings.Source)) do
+		local limb = char:FindFirstChild(pn)
+		if limb and limb:IsA("BasePart") then
+			local a0 = Instance.new("Attachment", limb)
+			a0.Name = "FY_TrailAtt0"
+			a0.Position = Vector3.new(0, limb.Size.Y / 2, 0)
+			local a1 = Instance.new("Attachment", limb)
+			a1.Name = "FY_TrailAtt1"
+			a1.Position = Vector3.new(0, -limb.Size.Y / 2, 0)
+			local tr = Instance.new("Trail", limb)
+			tr.Name = "FY_Trail"
+			tr.Attachment0 = a0
+			tr.Attachment1 = a1
+			tr.Color = ColorSequence.new(trailColorAt(tick()))
+			tr.Transparency = ns
+			tr.Lifetime = TrailSettings.Length
+			tr.LightEmission = 1
+			table.insert(activeTrails, tr)
+		end
+	end
+end
+local function rebuildTrails() buildTrails(getMyChar()) end
+
+RunService.RenderStepped:Connect(function()
+	if not TrailSettings.Enabled or #activeTrails == 0 then return end
+	local col = ColorSequence.new(trailColorAt(tick()))
+	for _, tr in ipairs(activeTrails) do
+		if tr.Parent then tr.Color = col end
+	end
+end)
+
+local worldColorEff = Instance.new("ColorCorrectionEffect", LightingService)
+worldColorEff.Name = "FYWorldColor"
+worldColorEff.Enabled = false
+worldColorEff.TintColor = Color3.fromRGB(255, 255, 255)
+local WorldColorVal = Color3.fromRGB(255, 255, 255)
+local WorldColorStrength = 100
+local function applyWorldColor()
+worldColorEff.TintColor = Color3.new(1, 1, 1):Lerp(WorldColorVal, math.clamp(WorldColorStrength, 0, 100) / 100)
+end
+local dofEff = Instance.new("DepthOfFieldEffect", LightingService)
+dofEff.Enabled = false
+dofEff.InFocusRadius = 8
+local ccEff = Instance.new("ColorCorrectionEffect", LightingService)
+ccEff.Saturation = 0
+ccEff.Contrast = 0
+
+createSection(tabFrames.Visuals, "Visuals")
+extraToggle(tabFrames.Visuals, "Crosshair", false, setCrosshair)
+extraSlider(tabFrames.Visuals, "FOV", 30, 120, 0, nil,
+	function() return VisualSettings.FOV end,
+	function(v) applyFOV(v) end,
+	function(v) return tostring(v) end)
+extraToggle(tabFrames.Visuals, "Fullbright", false, setFullbright)
+extraToggle(tabFrames.Visuals, "Trails", false, function(on)
+	TrailSettings.Enabled = on
+	rebuildTrails()
+end)
+local trailModeBtn = createContentButton(tabFrames.Visuals, "Trail Color Mode: " .. TrailSettings.Mode, function() end)
+trailModeBtn.MouseButton1Click:Connect(function()
+	local opts = {"Solid", "TwoWay", "ThreeWay", "Rainbow"}
+	local idx = table.find(opts, TrailSettings.Mode) or 1
+	TrailSettings.Mode = opts[(idx % #opts) + 1]
+	trailModeBtn.Text = "Trail Color Mode: " .. TrailSettings.Mode
+	if updateTrailVis then updateTrailVis() end
+end)
+extraDropdown(tabFrames.Visuals, "Trail Source", {"All", "Body", "Arms", "Legs", "Legs+Arms"},
+	function() return TrailSettings.Source end,
+	function(s) TrailSettings.Source = s rebuildTrails() end)
+local trailRowA = extraColorInput(tabFrames.Visuals, "Trail Color A", function() return TrailSettings.ColorA end, function(c) TrailSettings.ColorA = c end)
+local trailRowB = extraColorInput(tabFrames.Visuals, "Trail Color B", function() return TrailSettings.ColorB end, function(c) TrailSettings.ColorB = c end)
+local trailRowC = extraColorInput(tabFrames.Visuals, "Trail Color C", function() return TrailSettings.ColorC end, function(c) TrailSettings.ColorC = c end)
+updateTrailVis = function()
+	trailRowA.Visible = (TrailSettings.Mode ~= "Rainbow")
+	trailRowB.Visible = (TrailSettings.Mode == "TwoWay" or TrailSettings.Mode == "ThreeWay")
+	trailRowC.Visible = (TrailSettings.Mode == "ThreeWay")
+end
+updateTrailVis()
+extraSlider(tabFrames.Visuals, "Trail Length", 0.1, 5, 1, nil,
+	function() return TrailSettings.Length end,
+	function(v) TrailSettings.Length = v rebuildTrails() end,
+	function(v) return string.format("%.1f", v) .. "s" end)
+extraSlider(tabFrames.Visuals, "Trail Fade Speed", 0.2, 10, 1, nil,
+	function() return TrailSettings.FadeSpeed end,
+	function(v) TrailSettings.FadeSpeed = v rebuildTrails() end,
+	function(v) return string.format("%.1f", v) end)
+extraSlider(tabFrames.Visuals, "Trail Color Speed", 0.1, 10, 1, nil,
+	function() return TrailSettings.ColorSpeed end,
+	function(v) TrailSettings.ColorSpeed = v end,
+	function(v) return string.format("%.1f", v) end)
+extraSlider(tabFrames.Visuals, "Aspect Horizontal", 10, 100, 0, 100,
+	function() return VisualSettings.AspectH end,
+	function(v) VisualSettings.AspectH = v updateAspectLoop() end,
+	function(v) return v .. "%" end)
+extraSlider(tabFrames.Visuals, "Aspect Vertical", 10, 100, 0, 100,
+	function() return VisualSettings.AspectV end,
+	function(v) VisualSettings.AspectV = v updateAspectLoop() end,
+	function(v) return v .. "%" end)
+extraToggle(tabFrames.Visuals, "World Color", false, function(on)
+    worldColorEff.Enabled = on
+end)
+extraColorInput(tabFrames.Visuals, "World Color", function() return WorldColorVal end, function(c)
+    WorldColorVal = c
+    applyWorldColor()
+end)
+extraSlider(tabFrames.Visuals, "World Color Strength", 0, 100, 0, 100,
+    function() return WorldColorStrength end,
+    function(v) WorldColorStrength = v applyWorldColor() end,
+    function(v) return v .. "%" end)
+extraSlider(tabFrames.Visuals, "Depth of Field", 0, 200, 0, 0,
+	function() return VisualSettings.DoF end,
+	function(v) VisualSettings.DoF = v dofEff.Enabled = v > 0 dofEff.FarIntensity = v / 100 dofEff.NearIntensity = v / 200 end,
+	function(v) return tostring(v) end)
+extraSlider(tabFrames.Visuals, "Saturation", 0, 200, 0, 100,
+	function() return VisualSettings.Saturation end,
+	function(v) VisualSettings.Saturation = v ccEff.Saturation = (v - 100) / 100 end,
+	function(v) return v .. "%" end)
+extraSlider(tabFrames.Visuals, "Contrast", 0, 200, 0, 100,
+	function() return VisualSettings.Contrast end,
+	function(v) VisualSettings.Contrast = v ccEff.Contrast = (v - 100) / 100 end,
+	function(v) return v .. "%" end)
+
+LocalPlayer.CharacterAdded:Connect(function(char)
+	if TrailSettings.Enabled then
+		task.wait(0.1)
+		buildTrails(char)
+	end
+end)
+
+RunService.Heartbeat:Connect(function(dt)
+	if dofEff.Enabled then
+		local cam = workspace.CurrentCamera
+		local r = getMyRoot()
+		if cam and r then dofEff.FocusDistance = (cam.CFrame.Position - r.Position).Magnitude end
+	end
+end)
+
+------------------------------------------------------------
+-- 4) UTILITIES
+------------------------------------------------------------
+local function serverHop()
+	notify("Server Hop", "Searching for a new server...")
+	local ok, res = pcall(function()
+		return game:HttpGet("https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Asc&limit=100")
+	end)
+	if not ok then notify("Server Hop", "Failed to get server list") return end
+	local ok2, data = pcall(function() return HttpService:JSONDecode(res) end)
+	if not ok2 or type(data) ~= "table" or type(data.data) ~= "table" then
+		notify("Server Hop", "Failed to parse server list")
+		return
+	end
+	local candidates = {}
+	for _, s in ipairs(data.data) do
+		if s.id and s.id ~= game.JobId and type(s.playing) == "number" and s.playing < (s.maxPlayers or 999) then
+			table.insert(candidates, s.id)
+		end
+	end
+	if #candidates == 0 then notify("Server Hop", "No other servers found") return end
+	local pick = candidates[math.random(1, #candidates)]
+	local ok3, err = pcall(function()
+		TeleportService:TeleportToPlaceInstance(game.PlaceId, pick, LocalPlayer)
+	end)
+	if not ok3 then notify("Server Hop", "Teleport failed: " .. tostring(err)) end
+end
+
+local function rejoin()
+	notify("Rejoin", "Rejoining...")
+	pcall(function() TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LocalPlayer) end)
+	task.wait(0.5)
+	pcall(function() TeleportService:Teleport(game.PlaceId, LocalPlayer) end)
+end
+
+createSection(tabFrames.Utilities, "Utilities")
+createContentButton(tabFrames.Utilities, "Server Hop", serverHop)
+createContentButton(tabFrames.Utilities, "Rejoin", rejoin)
+
+------------------------------------------------------------
+-- 5) SERVER
+------------------------------------------------------------
+local sessionStart = os.clock()
+local sessionDeaths = 0
+local sessionWalked = 0
+local lastRootPos = nil
+
+local function fmtHMS(sec)
+	sec = math.floor(sec)
+	return string.format("%02d:%02d:%02d", math.floor(sec / 3600), math.floor((sec % 3600) / 60), sec % 60)
+end
+
+createSection(tabFrames.Server, "This Server")
+local srvPlaceL = createLabel(tabFrames.Server, "Place: " .. game.PlaceId)
+local srvJobL = createLabel(tabFrames.Server, "Job: " .. (game.JobId ~= "" and game.JobId or "none"))
+local srvUsersL = createLabel(tabFrames.Server, "Users: --")
+local srvUptimeL = createLabel(tabFrames.Server, "Uptime: 00:00:00")
+local srvPingL = createLabel(tabFrames.Server, "Ping: --")
+createSection(tabFrames.Server, "Session")
+local sesPlayL = createLabel(tabFrames.Server, "Playtime: 00:00:00")
+local sesDeathsL = createLabel(tabFrames.Server, "Deaths: 0")
+local sesWalkL = createLabel(tabFrames.Server, "Walked: 0 studs")
+
+task.spawn(function()
+	local ok, info = pcall(function() return Marketplace:GetProductInfo(game.PlaceId) end)
+	if ok and info and info.Name then
+		srvPlaceL.Text = "Place: " .. game.PlaceId .. " (" .. info.Name .. ")"
+	end
+end)
+
+local function hookSessionChar(char)
+	local h = char:WaitForChild("Humanoid", 5)
+	if h then
+		h.Died:Connect(function() sessionDeaths = sessionDeaths + 1 end)
+	end
+end
+LocalPlayer.CharacterAdded:Connect(hookSessionChar)
+if LocalPlayer.Character then hookSessionChar(LocalPlayer.Character) end
+
+RunService.Heartbeat:Connect(function()
+	local r = getMyRoot()
+	if r then
+		if lastRootPos then
+			local d = (r.Position - lastRootPos).Magnitude
+			if d < 50 then sessionWalked = sessionWalked + d end
+		end
+		lastRootPos = r.Position
+	else
+		lastRootPos = nil
+	end
+end)
+
+task.spawn(function()
+	while true do
+		task.wait(1)
+		pcall(function()
+			srvUsersL.Text = "Users: " .. #Players:GetPlayers() .. "/" .. Players.MaxPlayers
+			srvPingL.Text = "Ping: " .. math.floor(StatsService.PerformanceStats.Ping:GetValue()) .. " ms"
+			srvUptimeL.Text = "Uptime: " .. fmtHMS(os.clock() - sessionStart)
+			sesPlayL.Text = "Playtime: " .. fmtHMS(os.clock() - sessionStart)
+			sesDeathsL.Text = "Deaths: " .. sessionDeaths
+			sesWalkL.Text = "Walked: " .. math.floor(sessionWalked) .. " studs"
+		end)
+	end
+end)
+end
 
 -- =========================================================
 -- ========== MUSIC MODULE =================================
 -- =========================================================
 local function initMusicModule(desyncTabs)
 	local SoundService = game:GetService("SoundService")
-	local F_R = Enum.Font.SourceSans
-	local F_B = Enum.Font.SourceSansBold
-	local F_S = Enum.Font.SourceSansSemibold
+	local F_R = FONT
+	local F_B = FONT
+	local F_S = FONT
 
 	local FOLDER = "EmilyUi/Music"
 	local FILE_MUSIC = FOLDER .. "/EmilyUiMusic.json"
@@ -2607,7 +3439,7 @@ local function initMusicModule(desyncTabs)
 	local function mkBox(p, txt, sz, pos, ph, ts)
 		local b = Instance.new("TextBox"); b.Parent = p
 		b.Size = sz; b.Position = pos or UDim2.new(0,0,0,0)
-		b.Font = F_R; b.TextSize = ts or 14; b.Text = txt or ""
+		b.Font = F_R; b.TextSize = 13; b.Text = txt or ""
 		b.PlaceholderText = ph or ""
 		b.BackgroundColor3 = uiColor_TextBoxColor; b.TextColor3 = uiColor_TextColor
 		b.PlaceholderColor3 = Color3.fromRGB(90,90,90)
@@ -2620,7 +3452,7 @@ local function initMusicModule(desyncTabs)
 	local function mkLabel(p, txt, sz, pos, font, ts, col, ta)
 	    local l = Instance.new("TextLabel"); l.Parent = p
 	    l.Size = sz; l.Position = pos or UDim2.new(0,0,0,0)
-	    l.Font = font or F_S; l.TextSize = ts or 14
+	    l.Font = font or F_S; l.TextSize = 13
 	    l.Text = txt or ""; l.TextColor3 = col or uiColor_TextColor
 	    l.BackgroundTransparency = 1
 	    if ta then l.TextXAlignment = ta end
@@ -2630,8 +3462,10 @@ local function initMusicModule(desyncTabs)
     end
 	local function mkBtn(p, txt, sz, pos, font, ts, themed, bg, tc)
 		local b = Instance.new("TextButton"); b.Parent = p
-		b.Size = sz; b.Position = pos or UDim2.new(0,0,0,0)
-		b.Font = font or F_B; b.TextSize = ts or 14
+		local hh = sz.Y.Offset
+	    if sz.Y.Scale == 0 and hh >= 24 and hh <= 34 then hh = 30 end
+	    b.Size = UDim2.new(sz.X.Scale, sz.X.Offset, sz.Y.Scale, hh); b.Position = pos or UDim2.new(0,0,0,0)
+		b.Font = font or F_B; b.TextSize = 13
 		b.Text = txt or ""; b.TextWrapped = true
 		b.BackgroundColor3 = bg or uiColor_ButtonColor
 		b.TextColor3 = tc or uiColor_TextColor
@@ -2826,7 +3660,6 @@ local function initMusicModule(desyncTabs)
 		playingLabel = mkLabel(sp, "Script Disabled", UDim2.new(1,-100,0,15), UDim2.new(0,50,0,20), F_S, 12)
 		playingLabel.TextWrapped = true
 
-		toggleStateBtn = mkBtn(inner, "TOGGLE: OFF", UDim2.new(1,-20,0,30), UDim2.new(0,10,0,165), F_S, 14, "no", C_DARKRED, C_RED)
 
 		local function sliderToMouse()
 			if not musicSound or musicSound.TimeLength <= 0 or not ToggleState then return end
@@ -2859,26 +3692,13 @@ local function initMusicModule(desyncTabs)
 		end)
 		stopBtn.MouseButton1Click:Connect(function() if musicSound then musicSound:Stop() end end)
 
-		toggleStateBtn.MouseButton1Click:Connect(function()
-			ToggleState = not ToggleState
-			if ToggleState then
-				toggleStateBtn.Text = "TOGGLE: ON"; toggleStateBtn.TextColor3 = C_GRN; toggleStateBtn.BackgroundColor3 = C_DARKGRN
-				rebuildParts(Settings.Parts)
-				if musicSound then musicSound:Play() end
-				playingLabel.Text = "Script Enabled"
-			else
-				toggleStateBtn.Text = "TOGGLE: OFF"; toggleStateBtn.TextColor3 = C_RED; toggleStateBtn.BackgroundColor3 = C_DARKRED
-				if musicSound then musicSound:Stop() end
-				Parts:ClearAllChildren()
-				lineProgress.Size = UDim2.new(0,0,0,6)
-				timePosLabel.Text = "0:00"
-				playingLabel.Text = "Script Disabled"
-			end
-		end)
 	end
 
 	--// 2. MUSIC
 	local searchQuery = ""
+    local PAGE_SIZE = 50
+    local musicPage, grabPage = 1, 1
+    local musicPageLbl, grabPageLbl
 	local addMenuFrame, catMenuFrame
 	local function buildMusic(parent)
 		local inner = mkPanel(parent, UDim2.new(1,0,1,0))
@@ -2936,6 +3756,17 @@ local function initMusicModule(desyncTabs)
 	 		end)
  		end)
 
+        local mPrevB = mkBtn(controls, "<", UDim2.new(0,30,0,26), UDim2.new(0,480,0,4), F_S, 13, "no", Color3.fromRGB(60,60,60), C_TEXT)
+        musicPageLbl = mkLabel(controls, "1/1", UDim2.new(0,70,0,26), UDim2.new(0,515,0,4), F_S, 13, C_TEXT2, Enum.TextXAlignment.Center)
+        local mNextB = mkBtn(controls, ">", UDim2.new(0,30,0,26), UDim2.new(0,590,0,4), F_S, 13, "no", Color3.fromRGB(60,60,60), C_TEXT)
+        mPrevB.MouseButton1Click:Connect(function()
+	        if musicPage > 1 then musicPage = musicPage - 1; updateMusicList() end
+        end)
+        mNextB.MouseButton1Click:Connect(function()
+	        musicPage = musicPage + 1
+	        updateMusicList()
+        end)
+
 		addMenuFrame = create("Frame", {Parent = inner, Size = UDim2.new(0.9,0,0.75,0), Position = UDim2.new(0.05,0,0.1,0), BackgroundColor3 = Color3.fromRGB(25,25,25), BorderColor3 = C_BORDER, BorderSizePixel = 1, Visible = false, ZIndex = 20})
 		corner(addMenuFrame)
 		mkLabel(addMenuFrame, "TRACK EDITOR", UDim2.new(1,0,0.12,0), UDim2.new(0,0,0,0), F_S, 15, C_TEXT2, Enum.TextXAlignment.Center)
@@ -2970,46 +3801,58 @@ local function initMusicModule(desyncTabs)
 			catFrame.CanvasSize = UDim2.new(0,0,0, y + 10)
 		end
 
-		updateMusicList = function()
-			for _, c in ipairs(musFrame:GetChildren()) do if c:IsA("TextButton") then c:Destroy() end end
-			local sx, sy, px, py = 6, 5, 4, 6
-			local tw, th = 88, 45
-			local col, row = 0, 0
-			local tracks = DataStructure.Categories[currentCategory] or {}
-			for id, td in pairs(tracks) do
-				local nm = (td.name or ""):lower()
-				local idL = tostring(id):lower()
-				if searchQuery == "" or nm:find(searchQuery, 1, true) or idL:find(searchQuery, 1, true) then
-	 				local isBroken = brokenIds[tostring(id)] == true
- 					local bgCol = isBroken and C_DARKRED or (currentSelectedId == tostring(id) and lighter(uiColor_ButtonColor, 40) or uiColor_ButtonColor)
- 					local txCol = isBroken and C_RED or uiColor_TextColor
- 					local b = mkBtn(musFrame, td.name or tostring(id), UDim2.new(0,tw,0,th),
- 						UDim2.new(0, sx + col*(tw+px), 0, sy + row*(th+py)), F_R, 12, "no", bgCol, txCol)
-					b.MouseButton1Click:Connect(function()
-						if not ToggleState then return end
-						currentSelectedId = tostring(id)
-						soundIdBox.Text = tostring(id)
-						volumeBox.Text = tostring(td.volume or 1)
-						pitchBox.Text = tostring(td.pitch or 1)
-						updateMusicList()
-						if not musicSound or musicSound.Parent ~= ScreenGui then
-							musicSound = makeMusicSound(tostring(id))
-							runTimelineLoop()
-						end
-						musicSound.SoundId = "rbxassetid://" .. id
-						musicSound.Volume = tonumber(td.volume) or 1
-						musicSound.PlaybackSpeed = tonumber(td.pitch) or 1
-						musicSound.TimePosition = tonumber(td.start_time) or 0
-						musicSound:Play()
-						playingLabel.Text = "[" .. currentCategory .. "] " .. (td.name or tostring(id))
-					end)
-					col = col + 1
-					if col >= 7 then col = 0; row = row + 1 end -- 7 В СТРОКУ
-				end
-			end
-			local totalRows = col > 0 and (row + 1) or row
-			musFrame.CanvasSize = UDim2.new(0,0,0, sy + totalRows * (th + py) + 10)
-		end
+	    updateMusicList = function()
+	        for _, c in ipairs(musFrame:GetChildren()) do if c:IsA("TextButton") then c:Destroy() end end
+	        local tracks = DataStructure.Categories[currentCategory] or {}
+	        local list = {}
+	        for id, td in pairs(tracks) do
+    		    local nm = (td.name or ""):lower()
+		        local idL = tostring(id):lower()
+		        if searchQuery == "" or nm:find(searchQuery, 1, true) or idL:find(searchQuery, 1, true) then
+			        table.insert(list, {id = tostring(id), td = td})
+    		    end
+	        end
+	        table.sort(list, function(a, b) return (a.td.name or a.id):lower() < (b.td.name or b.id):lower() end)
+	        local totalPages = math.max(1, math.ceil(#list / PAGE_SIZE))
+	        if musicPage < 1 then musicPage = 1 end
+	        if musicPage > totalPages then musicPage = totalPages end
+	        if musicPageLbl then musicPageLbl.Text = musicPage .. "/" .. totalPages end
+	        local first = (musicPage - 1) * PAGE_SIZE + 1
+	        local last = math.min(#list, musicPage * PAGE_SIZE)
+	        local sx, sy, px, py = 6, 5, 4, 6
+	        local tw, th = 88, 45
+	        local col, row = 0, 0
+	        for i = first, last do
+		        local id, td = list[i].id, list[i].td
+		        local isBroken = brokenIds[id] == true
+		        local bgCol = isBroken and C_DARKRED or (currentSelectedId == id and lighter(uiColor_ButtonColor, 40) or uiColor_ButtonColor)
+		        local txCol = isBroken and C_RED or uiColor_TextColor
+		        local b = mkBtn(musFrame, td.name or id, UDim2.new(0,tw,0,th),
+    			    UDim2.new(0, sx + col*(tw+px), 0, sy + row*(th+py)), F_R, 12, "no", bgCol, txCol)
+		        b.MouseButton1Click:Connect(function()
+    			    if not ToggleState then return end
+			        currentSelectedId = id
+			        soundIdBox.Text = id
+			        volumeBox.Text = tostring(td.volume or 1)
+			        pitchBox.Text = tostring(td.pitch or 1)
+			        updateMusicList()
+			        if not musicSound or musicSound.Parent ~= ScreenGui then
+				        musicSound = makeMusicSound(id)
+    				    runTimelineLoop()
+			        end
+			        musicSound.SoundId = "rbxassetid://" .. id
+			        musicSound.Volume = tonumber(td.volume) or 1
+			        musicSound.PlaybackSpeed = tonumber(td.pitch) or 1
+			        musicSound.TimePosition = tonumber(td.start_time) or 0
+			        musicSound:Play()
+    			    playingLabel.Text = "[" .. currentCategory .. "] " .. (td.name or id)
+		        end)
+		        col = col + 1
+		        if col >= 7 then col = 0; row = row + 1 end
+	        end
+	        local totalRows = col > 0 and (row + 1) or row
+	        musFrame.CanvasSize = UDim2.new(0,0,0, sy + totalRows * (th + py) + 10)
+        end
 
 		updateCategoryList(); updateMusicList()
 
@@ -3188,6 +4031,7 @@ local function initMusicModule(desyncTabs)
 	local selectedGrabbedId = ""
 	local isGrabberScanning = false
 	local scanConnection = nil
+    local scanCycleThread = nil
 	local function buildGrabber(parent)
 		local inner = mkPanel(parent, UDim2.new(1,0,1,0))
 		mkLabel(inner, "GRABBER", UDim2.new(1,-20,0,24), UDim2.new(0,10,0,8), F_S, 18)
@@ -3197,6 +4041,17 @@ local function initMusicModule(desyncTabs)
 		local gScanB = mkBtn(controls, "SCAN", UDim2.new(0,100,0,26), UDim2.new(0,105,0,4), F_S, 13, false, C_DARKBLUE, C_TEXT)
 		local gDelB = mkBtn(controls, "DELETE", UDim2.new(0,90,0,26), UDim2.new(0,215,0,4), F_S, 13, false, C_DARKRED, C_TEXT)
 		local gBlackB = mkBtn(controls, "BLACKLIST", UDim2.new(0,95,0,26), UDim2.new(0,315,0,4), F_S, 13, false, Color3.fromRGB(45,45,45), C_TEXT)
+        local gPrevB = mkBtn(controls, "<", UDim2.new(0,30,0,26), UDim2.new(0,480,0,4), F_S, 13, "no", Color3.fromRGB(60,60,60), C_TEXT)
+        grabPageLbl = mkLabel(controls, "1/1", UDim2.new(0,70,0,26), UDim2.new(0,515,0,4), F_S, 13, C_TEXT2, Enum.TextXAlignment.Center)
+        local gNextB = mkBtn(controls, ">", UDim2.new(0,30,0,26), UDim2.new(0,590,0,4), F_S, 13, "no", Color3.fromRGB(60,60,60), C_TEXT)
+        gPrevB.MouseButton1Click:Connect(function()
+	        if grabPage > 1 then grabPage = grabPage - 1; updateGrabberList() end
+        end)
+        gNextB.MouseButton1Click:Connect(function()
+	        grabPage = grabPage + 1
+	        updateGrabberList()
+        end)
+
 
 		local function checkAndAddSound(snd)
 			if snd:IsA("Sound") and snd.IsPlaying and snd.SoundId ~= "" then
@@ -3212,99 +4067,179 @@ local function initMusicModule(desyncTabs)
 		end
 
 		updateGrabberList = function()
-			for _, c in ipairs(grabFrame:GetChildren()) do if c:IsA("TextButton") then c:Destroy() end end
-			local col, row = 0, 0
-			local w, h, gap = 100, 40, 5
-			for _, id in ipairs(grabbedIds) do
-				local b = mkBtn(grabFrame, "ID: " .. tostring(id), UDim2.new(0,w,0,h),
- 					UDim2.new(0, 5 + col*(w+gap), 0, 5 + row*(h+gap)), F_R, 12, "no",
- 					selectedGrabbedId == tostring(id) and lighter(uiColor_ButtonColor, 40) or uiColor_ButtonColor, uiColor_TextColor)
-				b.MouseButton1Click:Connect(function()
-					if not ToggleState then return end
-					selectedGrabbedId = tostring(id)
-					soundIdBox.Text = tostring(id)
-					updateGrabberList()
-					if setclipboard then setclipboard(tostring(id)) end
-					if not musicSound or musicSound.Parent ~= ScreenGui then
-						musicSound = makeMusicSound(tostring(id))
-						runTimelineLoop()
-					end
-					musicSound.SoundId = "rbxassetid://" .. id
-					musicSound.TimePosition = 0
-					musicSound:Play()
-					playingLabel.Text = "Grabbed ID: " .. id
-				end)
-				col = col + 1
-				if col >= 7 then col = 0; row = row + 1 end -- 7 В СТРОКУ
-			end
-			grabFrame.CanvasSize = UDim2.new(0,0,0, 5 + (row+1)*(h+gap) + 10)
-		end
+	        for _, c in ipairs(grabFrame:GetChildren()) do if c:IsA("TextButton") then c:Destroy() end end
+	        local total = #grabbedIds
+	        local totalPages = math.max(1, math.ceil(total / PAGE_SIZE))
+	        if grabPage < 1 then grabPage = 1 end
+	        if grabPage > totalPages then grabPage = totalPages end
+	        if grabPageLbl then grabPageLbl.Text = grabPage .. "/" .. totalPages end
+	        local first = (grabPage - 1) * PAGE_SIZE + 1
+	        local last = math.min(total, grabPage * PAGE_SIZE)
+	        local col, row = 0, 0
+	        local w, h, gap = 100, 40, 5
+	        for i = first, last do
+		        local id = grabbedIds[i]
+		        local b = mkBtn(grabFrame, tostring(id), UDim2.new(0,w,0,h),
+			        UDim2.new(0, 5 + col*(w+gap), 0, 5 + row*(h+gap)), F_R, 12, "no",
+			        selectedGrabbedId == tostring(id) and lighter(uiColor_ButtonColor, 40) or uiColor_ButtonColor, uiColor_TextColor)
+		        b.MouseButton1Click:Connect(function()
+			        if not ToggleState then return end
+			        selectedGrabbedId = tostring(id)
+			        soundIdBox.Text = tostring(id)
+			        updateGrabberList()
+			        if setclipboard then setclipboard(tostring(id)) end
+			        if not musicSound or musicSound.Parent ~= ScreenGui then
+				        musicSound = makeMusicSound(tostring(id))
+				        runTimelineLoop()
+			        end
+			        musicSound.SoundId = "rbxassetid://" .. id
+			        musicSound.TimePosition = 0
+			        musicSound:Play()
+			        playingLabel.Text = "Grabbed ID: " .. id
+		        end)
+		        col = col + 1
+		        if col >= 7 then col = 0; row = row + 1 end
+	        end
+	        grabFrame.CanvasSize = UDim2.new(0,0,0, 5 + (row+1)*(h+gap) + 10)
+        end
+        
 		updateGrabberList()
 
-		local function startSmartScanning()
-			for _, serviceName in ipairs({"Workspace", "SoundService", "Players"}) do
-				local srv = game:GetService(serviceName)
-				if srv then
-					for _, v in ipairs(srv:GetDescendants()) do pcall(checkAndAddSound, v) end
-				end
-			end
-			scanConnection = game.DescendantAdded:Connect(function(desc)
-				pcall(function()
-					if desc:IsA("Sound") then
-						checkAndAddSound(desc)
-						desc:GetPropertyChangedSignal("IsPlaying"):Connect(function() checkAndAddSound(desc) end)
-					end
-				end)
-			end)
-		end
+		local function fullSweep()
+            pcall(
+                function()
+                    for _, v in ipairs(game:GetDescendants()) do
+                        if v:IsA("Sound") then
+                            checkAndAddSound(v)
+                        end
+                    end
+                end
+            )  
+        end
+        local function startSmartScanning()
+            fullSweep()
+            scanConnection =
+                game.DescendantAdded:Connect(
+                function(desc)
+                    pcall(
+                        function()
+                            if desc:IsA("Sound") then
+                                checkAndAddSound(desc)
+                                desc:GetPropertyChangedSignal("IsPlaying"):Connect(
+                                    function()
+                                        checkAndAddSound(desc)
+                                    end
+                                )
+                            end
+                        end
+                    )
+                end
+            )
+            if scanCycleThread then
+                task.cancel(scanCycleThread)
+            end
+            scanCycleThread =
+                task.spawn(
+                function()
+                    while isGrabberScanning do
+                        task.wait(10)
+                        if not isGrabberScanning then
+                            break
+                        end
+                        fullSweep()
+                    end
+                end
+            )
+        end
+        local function stopSmartScanning()
+            if scanConnection then
+                scanConnection:Disconnect()
+                scanConnection = nil
+            end
+            if scanCycleThread then
+                task.cancel(scanCycleThread)
+                scanCycleThread = nil
+            end
+        end
 
 		gStartB.MouseButton1Click:Connect(function()
-			if not ToggleState then return end
 			isGrabberScanning = not isGrabberScanning
 			if isGrabberScanning then
 				gStartB.Text = "STOP"; gStartB.BackgroundColor3 = C_DARKRED
 				startSmartScanning()
 			else
-				gStartB.Text = "START"; gStartB.BackgroundColor3 = C_DARKGRN
-				if scanConnection then scanConnection:Disconnect(); scanConnection = nil end
-			end
+                gStartB.Text = "START"; gStartB.BackgroundColor3 = C_DARKGRN
+                stopSmartScanning()
+            end
 		end)
 
-		gScanB.MouseButton1Click:Connect(function()
-			if not ToggleState then return end
-			local seen, uniq = {}, {}
-			for _, id in ipairs(grabbedIds) do
-				local k = tostring(id)
-				if not seen[k] then seen[k] = true; table.insert(uniq, id) end
-			end
-			grabbedIds = uniq
-			local musicIdSet = {}
-			for _, catData in pairs(DataStructure.Categories) do
-				for id, _ in pairs(catData) do musicIdSet[tostring(id)] = true end
-			end
-			local filtered = {}
-			for _, id in ipairs(grabbedIds) do
-				if not musicIdSet[tostring(id)] then table.insert(filtered, id) end
-			end
-			grabbedIds = filtered
-			local valid = {}
-			for _, id in ipairs(grabbedIds) do
-				local temp = Instance.new("Sound"); temp.SoundId = "rbxassetid://" .. id
-				temp.Volume = 0; temp.Parent = SoundService
-				pcall(function() temp:Play() end)
-				local el = 0
-				while el < 5 do
-					if temp.TimeLength > 0 then table.insert(valid, id); break end
-					task.wait(0.25); el = el + 0.25
-				end
-				temp:Stop(); temp:Destroy()
-				task.wait(0.2)
-			end
-			grabbedIds = valid
-			saveGrabber(); updateGrabberList()
-			selectedGrabbedId = ""
-			notify("Grabber", "Scan complete: " .. #valid .. " valid IDs")
-		end)
+		local isScanningLogicRunning = false
+        gScanB.MouseButton1Click:Connect(function()
+            if isScanningLogicRunning then return end
+            isScanningLogicRunning = true
+            local ScanGui = create("Frame", {
+                Name = "ScanProgressGui", Parent = inner,
+                AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 0),
+                Size = UDim2.new(0, 280, 0, 90),
+                BackgroundColor3 = Color3.fromRGB(20, 20, 20), BorderColor3 = Color3.fromRGB(60, 60, 60),
+                ZIndex = 20,
+            })
+            local ScanTitle = create("TextLabel", {Parent = ScanGui, Size = UDim2.new(1, 0, 0, 30), BackgroundTransparency = 1, Text = "VALIDATING GRABBER LIST...", TextColor3 = Color3.fromRGB(220, 220, 220), TextSize = 13, Font = FONT, ZIndex = 21})
+            local ScanStatus = create("TextLabel", {Parent = ScanGui, Position = UDim2.new(0, 0, 0, 30), Size = UDim2.new(1, 0, 0, 20), BackgroundTransparency = 1, Text = "Initializing...", TextColor3 = Color3.fromRGB(160, 160, 160), TextSize = 12, Font = FONT, ZIndex = 21})
+            local BarBack = create("Frame", {Parent = ScanGui, Position = UDim2.new(0.05, 0, 0, 60), Size = UDim2.new(0.9, 0, 0, 10), BackgroundColor3 = Color3.fromRGB(40, 40, 40), BorderSizePixel = 0, ZIndex = 21})
+            local BarFill = create("Frame", {Parent = BarBack, Size = UDim2.new(0, 0, 1, 0), BackgroundColor3 = Color3.fromRGB(100, 200, 100), BorderSizePixel = 0, ZIndex = 22})
+            task.spawn(function()
+            pcall(function()
+            task.wait(0.2)
+            ScanStatus.Text = "Removing duplicates..."
+            local uniq, seen = {}, {}
+            for _, id in ipairs(grabbedIds) do
+                local k = tostring(id)
+                if not seen[k] then seen[k] = true; table.insert(uniq, id) end
+            end
+            grabbedIds = uniq
+            ScanStatus.Text = "Cross-referencing with Music library..."
+            task.wait(0.2)
+            local musicIdSet = {}
+            for _, catData in pairs(DataStructure.Categories) do
+                for id, _ in pairs(catData) do musicIdSet[tostring(id)] = true end
+            end
+            local filtered = {}
+            for _, id in ipairs(grabbedIds) do
+                if not musicIdSet[tostring(id)] then table.insert(filtered, id) end
+            end
+            grabbedIds = filtered
+            saveGrabber()
+            local total = #grabbedIds
+            local valid = {}
+            for index, id in ipairs(grabbedIds) do
+                ScanStatus.Text = string.format("Testing playback: %d / %d (ID: %s)", index, total, tostring(id))
+                if total > 0 then BarFill.Size = UDim2.new(index / total, 0, 1, 0) end
+                local temp = Instance.new("Sound")
+                temp.SoundId = "rbxassetid://" .. tostring(id)
+                temp.Volume = 0
+                temp.Parent = SoundService
+                pcall(function() temp:Play() end)
+                local el = 0
+                while el < 5 do
+                    if temp.TimeLength > 0 then table.insert(valid, id); break end
+                    task.wait(0.25); el = el + 0.25
+                end
+                temp:Stop(); temp:Destroy()
+                task.wait(0.2)
+            end
+            grabbedIds = valid
+            saveGrabber(); updateGrabberList()
+            selectedGrabbedId = ""
+            ScanStatus.Text = string.format("Complete! %d / %d IDs are valid.", #valid, total)
+            BarFill.Size = UDim2.new(1, 0, 1, 0)
+            task.wait(2)
+            end)
+            ScanGui:Destroy()
+                isScanningLogicRunning = false
+                notify("Grabber", "Scan complete")
+            end)
+        end)
 
 		gDelB.MouseButton1Click:Connect(function()
 			local n = tonumber(selectedGrabbedId)
@@ -3427,7 +4362,39 @@ local function initMusicModule(desyncTabs)
 				updateTabButtonsTheme()
 		end)
 	end)
-		return musicTabs
+
+	local MusicSidebarToggle = create("TextButton", {
+		Name = "MToggle_Music", Parent = MenuInsided,
+		Size = UDim2.new(1, 0, 0, 40), LayoutOrder = 290, Visible = false,
+		BorderColor3 = COL_BORDER, Text = "Music: OFF", Font = FONT, TextSize = 12, TextWrapped = true,
+		BackgroundTransparency = 1 - uiGuiOpacity,
+	})
+	table.insert(themeElements.CustomButtons, MusicSidebarToggle)
+	table.insert(moduleToggles, {btn = MusicSidebarToggle, group = "Music"})
+	registerToggle(MusicSidebarToggle, function() return ToggleState end)
+	local function refreshMusicToggleText()
+		MusicSidebarToggle.Text = "Music: " .. (ToggleState and "ON" or "OFF")
+		paintToggleBtn(MusicSidebarToggle, ToggleState)
+	end
+	local function setMusicState(st)
+		ToggleState = st and true or false
+		if ToggleState then
+			rebuildParts(Settings.Parts)
+			if musicSound then musicSound:Play() end
+			if playingLabel then playingLabel.Text = "Script Enabled" end
+		else
+			if musicSound then musicSound:Stop() end
+			Parts:ClearAllChildren()
+			if lineProgress then lineProgress.Size = UDim2.new(0,0,0,6) end
+			if timePosLabel then timePosLabel.Text = "0:00" end
+			if playingLabel then playingLabel.Text = "Script Disabled" end
+		end
+		refreshMusicToggleText()
+	end
+	refreshMusicToggleText()
+	MusicSidebarToggle.MouseButton1Click:Connect(function() setMusicState(not ToggleState) end)
+
+	return musicTabs
 end
 
 local musicTabs = initMusicModule(desyncTabs)
@@ -3440,9 +4407,9 @@ local function initAimbotModule(desyncTabs, musicTabs)
 	desyncTabs = desyncTabs or {}
 	musicTabs = musicTabs or {}   -- ← страховка от nil
 	local Camera = workspace.CurrentCamera
-    local F_R = Enum.Font.SourceSans
-    local F_B = Enum.Font.SourceSansBold
-    local F_S = Enum.Font.SourceSansSemibold
+    local F_R = FONT
+    local F_B = FONT
+    local F_S = FONT
 
     --// Настройки аимбота (по умолчанию ВЫКЛЮЧЕНО)
     local AimSettings = {
@@ -3477,6 +4444,7 @@ local function initAimbotModule(desyncTabs, musicTabs)
 
 	--// Refs на UI-элементы (для apply/reset)
 	local uiRefs = {}
+    local refreshESPToggleText
 	--// Автосохранение настроек аимбота
 	local AIM_AUTO_FILE = "EmilyUi/FuckYou/AimSettings.json"
 	local function ensureAimDirs()
@@ -3560,6 +4528,7 @@ local function initAimbotModule(desyncTabs, musicTabs)
     local lastFire = 0
     local renderConnection = nil
     local aimInputConnection = nil
+    local setESPEnabled -- форвард-объявление (используется в keybind listener)
 
     local function createESP(player)
         if not player.Character then return end
@@ -3589,7 +4558,7 @@ local function initAimbotModule(desyncTabs, musicTabs)
         textTop.Size = UDim2.new(1, 0, 1, 0)
         textTop.BackgroundTransparency = 1
         textTop.TextColor3 = ESPSettings.Color
-        textTop.TextSize = 14
+        textTop.TextSize = 13
         textTop.Font = Enum.Font.GothamBold
         textTop.TextStrokeTransparency = 0.5
         textTop.TextYAlignment = Enum.TextYAlignment.Bottom
@@ -3672,6 +4641,29 @@ local function initAimbotModule(desyncTabs, musicTabs)
                 if instances.BillboardBottom then instances.BillboardBottom.Enabled = false end
                 if instances.Highlight then instances.Highlight.Enabled = false end
             end
+        end
+    end
+
+    --// Отдельный цикл ESP (работает даже когда аимбот выключен)
+    local espLoopConnection = nil
+    local function startESPLoop()
+        if espLoopConnection then espLoopConnection:Disconnect() end
+        espLoopConnection = RunService.RenderStepped:Connect(function()
+            if not ESPSettings.Enabled then return end
+            if tick() % 0.1 < 0.02 then
+                for _, p in ipairs(Players:GetPlayers()) do
+                    if p ~= LocalPlayer and not ESP_Instances[p] and p.Character then
+                        createESP(p)
+                    end
+                end
+                updateESP()
+            end
+        end)
+    end
+    local function stopESPLoop()
+        if espLoopConnection then
+            espLoopConnection:Disconnect()
+            espLoopConnection = nil
         end
     end
 
@@ -3838,7 +4830,7 @@ local function initAimbotModule(desyncTabs, musicTabs)
                 end
             end
             if input.KeyCode == AimKeybinds.ToggleESP then
-                ESPSettings.Enabled = not ESPSettings.Enabled
+                setESPEnabled(not ESPSettings.Enabled)
             end
             if AimSettings.Mode == "Toggle" then
                 local aimKey = AimSettings.Keybind
@@ -3883,7 +4875,7 @@ local function initAimbotModule(desyncTabs, musicTabs)
     local function mkLabel(p, txt, sz, pos, font, ts)
         local l = Instance.new("TextLabel")
         l.Parent = p; l.Text = txt; l.Size = sz; l.Position = pos
-        l.Font = font or F_S; l.TextSize = ts or 16
+        l.Font = font or F_S; l.TextSize = 13
         l.TextXAlignment = Enum.TextXAlignment.Left
         l.TextColor3 = uiColor_TextColor; l.BackgroundTransparency = 1
         table.insert(themeElements.Texts, l)
@@ -3893,7 +4885,7 @@ local function initAimbotModule(desyncTabs, musicTabs)
     local function mkBox(p, txt, sz, pos, ts)
         local b = Instance.new("TextBox")
         b.Parent = p; b.Text = txt or ""; b.Size = sz; b.Position = pos
-        b.Font = F_R; b.TextSize = ts or 14
+        b.Font = F_R; b.TextSize = 13
         b.BackgroundColor3 = uiColor_TextBoxColor; b.TextColor3 = uiColor_TextColor
         b.PlaceholderColor3 = Color3.fromRGB(90, 90, 90)
         b.BorderSizePixel = 0; b.ClearTextOnFocus = false
@@ -3905,7 +4897,7 @@ local function initAimbotModule(desyncTabs, musicTabs)
     local function mkBtn(p, txt, sz, pos, font, ts, themed, bg, tc)
         local b = Instance.new("TextButton")
         b.Parent = p; b.Text = txt; b.Size = sz; b.Position = pos
-        b.Font = font or F_B; b.TextSize = ts or 14
+        b.Font = font or F_B; b.TextSize = 13
         b.Text = txt or ""; b.TextWrapped = true
         b.BackgroundColor3 = bg or uiColor_ButtonColor
         b.TextColor3 = tc or uiColor_TextColor
@@ -3930,24 +4922,24 @@ local function initAimbotModule(desyncTabs, musicTabs)
     end
 
     local function mkToggle(p, name, state, sz, pos, callback)
-    	local btn = mkBtn(p, "", sz, pos, F_B, 14, "no", C_REDD, C_ROFF)
-    	local function paint()
-	        btn.Text = name .. ": " .. (state and "ON" or "OFF")
-        	btn.BackgroundColor3 = state and Color3.fromRGB(40, 70, 40) or C_REDD
-        	btn.TextColor3 = state and C_GRN or C_ROFF
-    	end
-    	paint()
-    	btn.MouseButton1Click:Connect(function()
-	        state = not state
-        	paint()
-        	if callback then callback(state) end
-    	end)
+	    local btn = mkBtn(p, "", sz, pos, F_B, 14, "no")
+	    local function paint()
+		    btn.Text = name .. ": " .. (state and "ON" or "OFF")
+    		paintToggleBtn(btn, state)
+	    end
+	    paint()
+	    registerToggle(btn, function() return state end)
+	    btn.MouseButton1Click:Connect(function()
+		    state = not state
+		    paint()
+    		if callback then callback(state) end
+	    end)
 	    return {
-    	    Button = btn,
-        	Get = function() return state end,
-        	Set = function(v) state = v and true or false; paint() end,
-    	}
-	end
+		    Button = btn,
+		    Get = function() return state end,
+    		Set = function(v) state = v and true or false; paint() end,
+	    }
+    end
 
     local function mkDropdown(p, name, options, default, sz, pos, callback)
     	local current = default
@@ -3992,12 +4984,6 @@ local function initAimbotModule(desyncTabs, musicTabs)
     	local sf = create("ScrollingFrame", {Parent = parent, Size = UDim2.new(1,0,1,0), BackgroundTransparency = 1, BorderSizePixel = 0, ScrollBarThickness = 4, CanvasSize = UDim2.new(0,0,0,420)})
     	local inner = mkPanel(sf, UDim2.new(1,0,0,420))
     	local y = 10
-    	uiRefs.aimToggle = mkToggle(inner, "Aimbot", AimSettings.Enabled, UDim2.new(1,-24,0,30), UDim2.new(0,12,0,y), function(state)
-	        AimSettings.Enabled = state
-        	if state then startAimbotLoop(); startKeybindListener() else stopAimbotLoop() end
-        	saveAimAuto()
-    	end)
-    	y = y + 38
 	    uiRefs.modeDD = mkDropdown(inner, "Mode", {"Hold", "Toggle", "Always"}, AimSettings.Mode, UDim2.new(1,-24,0,28), UDim2.new(0,12,0,y), function(val)
         	AimSettings.Mode = val; AimSettings.ActiveToggle = false; saveAimAuto()
 	    end)
@@ -4058,35 +5044,38 @@ local function initAimbotModule(desyncTabs, musicTabs)
 	end
 
     --// TAB 2: ESP
-    local function setESPEnabled(state)
-    	ESPSettings.Enabled = state
-    	if state then
-	        for _, p in ipairs(Players:GetPlayers()) do
-            	if p ~= LocalPlayer and not ESP_Instances[p] and p.Character then createESP(p) end
-        	end
-    	end
-    	if uiRefs.espToggle then uiRefs.espToggle.Set(state) end
-    	if uiRefs.enableESPToggle then uiRefs.enableESPToggle.Set(state) end
-    	saveAimAuto()
-	end
+    setESPEnabled = function(state)
+    ESPSettings.Enabled = state
+    if state then
+        for _, p in ipairs(Players:GetPlayers()) do
+            if p ~= LocalPlayer and not ESP_Instances[p] and p.Character then createESP(p) end
+        end
+            updateESP()          -- сразу заполняет Name/Username/HP/Distance
+            startESPLoop()
+        else
+            stopESPLoop()
+            updateESP()          -- прячет билборды при выключении
+        end
+        if uiRefs.espToggle then uiRefs.espToggle.Set(state) end
+        if uiRefs.enableESPToggle then uiRefs.enableESPToggle.Set(state) end
+        if refreshESPToggleText then refreshESPToggleText() end
+        saveAimAuto()
+    end
 	local function buildESPTab(parent)
 	    local sf = create("ScrollingFrame", {Parent = parent, Size = UDim2.new(1,0,1,0), BackgroundTransparency = 1, BorderSizePixel = 0, ScrollBarThickness = 4, CanvasSize = UDim2.new(0,0,0,400)})
 	    local inner = mkPanel(sf, UDim2.new(1,0,0,400))
 	    local y = 10
-	    uiRefs.espToggle = mkToggle(inner, "ESP", ESPSettings.Enabled, UDim2.new(1,-24,0,30), UDim2.new(0,12,0,y), function(state) setESPEnabled(state) end)
-    	y = y + 38
     	local refreshBtn = mkBtn(inner, "Refresh ESP (Update Players)", UDim2.new(1,-24,0,28), UDim2.new(0,12,0,y), F_B, 13)
     	refreshBtn.MouseButton1Click:Connect(function()
-	        cleanESP()
-        	for _, p in ipairs(Players:GetPlayers()) do
-	            if p ~= LocalPlayer and p.Character then createESP(p) end
-        	end
-	        refreshBtn.Text = "Refreshed!"
+            cleanESP()
+            for _, p in ipairs(Players:GetPlayers()) do
+                if p ~= LocalPlayer and p.Character then createESP(p) end
+            end
+            updateESP()
+            refreshBtn.Text = "Refreshed!"
         	task.delay(0.5, function() refreshBtn.Text = "Refresh ESP (Update Players)" end)
     	end)
 	    y = y + 34
-	    uiRefs.enableESPToggle = mkToggle(inner, "Enable ESP", ESPSettings.Enabled, UDim2.new(1,-24,0,28), UDim2.new(0,12,0,y), function(state) setESPEnabled(state) end)
-    	y = y + 34
     	uiRefs.showNameToggle = mkToggle(inner, "Show Name", ESPSettings.ShowName, UDim2.new(1,-24,0,28), UDim2.new(0,12,0,y), function(state)
 	        ESPSettings.ShowName = state; saveAimAuto()
 	    end)
@@ -4202,9 +5191,53 @@ local function initAimbotModule(desyncTabs, musicTabs)
     addAimTab("ESP", buildESPTab)
     addAimTab("Keybinds", buildKeybindsTab)
 
+    local AimSidebarToggle = create("TextButton", {
+		Name = "MToggle_Aim", Parent = MenuInsided,
+		Size = UDim2.new(1, 0, 0, 40), LayoutOrder = 390, Visible = false,
+		BorderColor3 = COL_BORDER, Text = "Aim: OFF", Font = FONT, TextSize = 12, TextWrapped = true,
+		BackgroundTransparency = 1 - uiGuiOpacity,
+	})
+	table.insert(themeElements.CustomButtons, AimSidebarToggle)
+	table.insert(moduleToggles, {btn = AimSidebarToggle, group = "Aim"})
+	registerToggle(AimSidebarToggle, function() return AimSettings.Enabled end)
+	local function refreshAimToggleText()
+		AimSidebarToggle.Text = "Aim: " .. (AimSettings.Enabled and "ON" or "OFF")
+		paintToggleBtn(AimSidebarToggle, AimSettings.Enabled)
+	end
+	refreshAimToggleText()
+	AimSidebarToggle.MouseButton1Click:Connect(function()
+		AimSettings.Enabled = not AimSettings.Enabled
+		if AimSettings.Enabled then
+			startAimbotLoop()
+			startKeybindListener()
+		else
+			stopAimbotLoop()
+		end
+		saveAimAuto()
+		refreshAimToggleText()
+	end)
+
+    local ESPSidebarToggle = create("TextButton", {
+	    Name = "MToggle_ESP", Parent = MenuInsided,
+	    Size = UDim2.new(1, 0, 0, 40), LayoutOrder = 391, Visible = false,
+	    BorderColor3 = COL_BORDER, Text = "ESP: OFF", Font = FONT, TextSize = 12, TextWrapped = true,
+	    BackgroundTransparency = 1 - uiGuiOpacity,
+    })
+    table.insert(themeElements.CustomButtons, ESPSidebarToggle)
+    table.insert(moduleToggles, {btn = ESPSidebarToggle, group = "Aim"})
+    registerToggle(ESPSidebarToggle, function() return ESPSettings.Enabled end)
+    refreshESPToggleText = function()
+    	ESPSidebarToggle.Text = "ESP: " .. (ESPSettings.Enabled and "ON" or "OFF")
+    	paintToggleBtn(ESPSidebarToggle, ESPSettings.Enabled)
+    end
+    refreshESPToggleText()
+    ESPSidebarToggle.MouseButton1Click:Connect(function()
+    	setESPEnabled(not ESPSettings.Enabled)
+    end)
+
 	--// ===== SAVE / LOAD / RESET AIM SETTINGS =====
 	local function refreshAimUI()
-	    if uiRefs.aimToggle then uiRefs.aimToggle.Set(AimSettings.Enabled) end
+	    refreshAimToggleText()
 	    if uiRefs.modeDD then uiRefs.modeDD.Set(AimSettings.Mode) end
 	    if uiRefs.aimPartDD then uiRefs.aimPartDD.Set(AimSettings.AimPart) end
 	    if uiRefs.stickToggle then uiRefs.stickToggle.Set(AimSettings.StickToTarget) end
@@ -4216,6 +5249,7 @@ local function initAimbotModule(desyncTabs, musicTabs)
 	    if uiRefs.smoothLabel then uiRefs.smoothLabel.Text = "Smoothness: " .. tostring(AimSettings.Smoothness) end
 	    if uiRefs.smoothBox then uiRefs.smoothBox.Text = tostring(AimSettings.Smoothness) end
 	    if uiRefs.espToggle then uiRefs.espToggle.Set(ESPSettings.Enabled) end
+        if refreshESPToggleText then refreshESPToggleText() end
 	    if uiRefs.enableESPToggle then uiRefs.enableESPToggle.Set(ESPSettings.Enabled) end
 	    if uiRefs.showNameToggle then uiRefs.showNameToggle.Set(ESPSettings.ShowName) end
 	    if uiRefs.showUsernameToggle then uiRefs.showUsernameToggle.Set(ESPSettings.ShowUsername) end
@@ -4272,16 +5306,12 @@ local function initAimbotModule(desyncTabs, musicTabs)
         	fovCircle.Color = ESPSettings.Color
         	fovCircle.Visible = AimSettings.DrawFOV and AimSettings.Enabled
     	end	
-    	if ESPSettings.Enabled then
-        	for _, p in ipairs(Players:GetPlayers()) do
-	            if p ~= LocalPlayer and not ESP_Instances[p] and p.Character then createESP(p) end
-    	    end
-    	end
+    	setESPEnabled(ESPSettings.Enabled)
     	refreshAimUI()
     	saveAimAuto()
 	end
 	local function resetAimDefaults()
-    	stopAimbotLoop(); cleanESP()
+        stopAimbotLoop(); stopESPLoop(); cleanESP()
     	AimSettings.Enabled = false; AimSettings.Mode = "Hold"; AimSettings.AimPart = "All"
     	AimSettings.StickToTarget = false; AimSettings.WallCheck = false; AimSettings.AutoFire = false
     	AimSettings.DrawFOV = true; AimSettings.FOV = 150; AimSettings.Smoothness = 0.2
@@ -5173,17 +6203,14 @@ local function initMovementModule(desyncTabs, musicTabs, aimTabs)
 	end
 
 	rebuildMarkers = function()
-		for _, data in pairs(markerData) do
-			pcall(function() data.Model:Destroy() end)
-		end
-		markerData = {}
-
-		for _, entries in pairs(library.categories) do
-			for _, entry in ipairs(entries) do
-				createMarker(entry)
-			end
-		end
-	end
+	    for _, data in pairs(markerData) do
+    		pcall(function() data.Model:Destroy() end)
+    	end
+    	markerData = {}
+    	for _, entry in ipairs(library.categories[selectedCategory] or {}) do
+		    createMarker(entry)
+	    end
+    end
 
 	------------------------------------------------------------
 	-- MOVERS
@@ -5848,33 +6875,6 @@ local function initMovementModule(desyncTabs, musicTabs, aimTabs)
 	    createSection(p, "MOVEMENT RECORDER")
 	    statusLabel = mvLabel(p, "Ready.", 40)
 
-	    movementToggleBtn = mvButton(p, "TOGGLE: OFF", function()
-		    MovementEnabled = not MovementEnabled
-
-		    if MovementEnabled then
-			    movementToggleBtn.Text = "TOGGLE: ON"
-			    movementToggleBtn.TextColor3 = C_GRN
-			    movementToggleBtn.BackgroundColor3 = Color3.fromRGB(40, 70, 40)
-			    setButtonBaseColor(movementToggleBtn, Color3.fromRGB(40, 70, 40))
-
-			    pcall(function() markersFolder.Parent = workspace end)
-
-    			if setStatus then setStatus("Movement enabled.") end
-		    else
-			    movementToggleBtn.Text = "TOGGLE: OFF"
-			    movementToggleBtn.TextColor3 = C_ROFF
-			    movementToggleBtn.BackgroundColor3 = Color3.fromRGB(70, 40, 40)
-			    setButtonBaseColor(movementToggleBtn, Color3.fromRGB(70, 40, 40))
-
-			    pcall(stopRecording, false)
-			    pcall(stopPlayback)
-
-			    pcall(function() markersFolder.Parent = nil end)
-
-    			if setStatus then setStatus("Movement disabled.") end
-		    end
-	    end, Color3.fromRGB(70, 40, 40), C_ROFF)
-
 	    createSection(p, "Recording")
 		nameBox = mvBox(p, "Recording name (optional)", 26)
 		startRecBtn = mvButton(p, "Start Recording", function()
@@ -5887,12 +6887,11 @@ local function initMovementModule(desyncTabs, musicTabs, aimTabs)
 
 		createSection(p, "Playback")
 		playBtn = mvButton(p, "Play Selected", function()
-			requestPlayback(selectedRecording)
-		end, Color3.fromRGB(30, 45, 70), Color3.fromRGB(150, 200, 255))
-
-		stopPlayBtn = mvButton(p, "Stop Playback", function()
-			stopPlayback()
-		end, Color3.fromRGB(70, 45, 20), Color3.fromRGB(255, 200, 120))
+            requestPlayback(selectedRecording)
+        end)
+        stopPlayBtn = mvButton(p, "Stop Playback", function()
+            stopPlayback()
+        end)
 
 		createSection(p, "Selected")
 		infoLabel = mvLabel(p, "Nothing selected.", 40)
@@ -5997,8 +6996,8 @@ local function initMovementModule(desyncTabs, musicTabs, aimTabs)
 		end)
 
 		local playSel = mvButton(p, "Play Selected", function()
-			requestPlayback(selectedRecording)
-		end, Color3.fromRGB(30, 45, 70), Color3.fromRGB(150, 200, 255))
+            requestPlayback(selectedRecording)
+        end)
 	end)
 
 	------------------------------------------------------------
@@ -6415,6 +7414,7 @@ local function initMovementModule(desyncTabs, musicTabs, aimTabs)
 				refreshCategories()
 				refreshRecordings()
 				refreshMainInfo()
+                rebuildMarkers()
 			end, 26)
 		end
 	end
@@ -6756,7 +7756,48 @@ local function initMovementModule(desyncTabs, musicTabs, aimTabs)
 			end
 			updateTabButtonsTheme()
 		end)
+
+        local function updateModuleTogglesVisibility(group)
+    		for _, t in ipairs(moduleToggles) do
+			    t.btn.Visible = (t.group == group)
+		    end
+	    end
+	    EmilyUi.MouseButton1Click:Connect(function() updateModuleTogglesVisibility("Main") end)
+	    Desync.MouseButton1Click:Connect(function() updateModuleTogglesVisibility("Desync") end)
+	    Music.MouseButton1Click:Connect(function() updateModuleTogglesVisibility("Music") end)
+	    Aim.MouseButton1Click:Connect(function() updateModuleTogglesVisibility("Aim") end)
+	    Movement.MouseButton1Click:Connect(function() updateModuleTogglesVisibility("Movement") end)
+	    updateModuleTogglesVisibility("Main")
+
 	end)
+
+    local MovementSidebarToggle = create("TextButton", {
+	    Name = "MToggle_Movement", Parent = MenuInsided,
+	    Size = UDim2.new(1, 0, 0, 40), LayoutOrder = 490, Visible = false,
+	    BorderColor3 = COL_BORDER, Text = "Movement: OFF", Font = FONT, TextSize = 12, TextWrapped = true,
+	    BackgroundTransparency = 1 - uiGuiOpacity,
+    })
+    table.insert(themeElements.CustomButtons, MovementSidebarToggle)
+    table.insert(moduleToggles, {btn = MovementSidebarToggle, group = "Movement"})
+    registerToggle(MovementSidebarToggle, function() return MovementEnabled end)
+    local function refreshMovementToggleText()
+    	MovementSidebarToggle.Text = "Movement: " .. (MovementEnabled and "ON" or "OFF")
+    	paintToggleBtn(MovementSidebarToggle, MovementEnabled)
+    end
+    refreshMovementToggleText()
+    MovementSidebarToggle.MouseButton1Click:Connect(function()
+    	MovementEnabled = not MovementEnabled
+    	if MovementEnabled then
+		    pcall(function() markersFolder.Parent = workspace end)
+		    if setStatus then setStatus("Movement enabled.") end
+	    else
+    		pcall(stopRecording, false)
+		    pcall(stopPlayback)
+		    pcall(function() markersFolder.Parent = nil end)
+		    if setStatus then setStatus("Movement disabled.") end
+	    end
+	    refreshMovementToggleText()
+    end)
 
 	return movementTabs
 end
@@ -6826,7 +7867,9 @@ local colorSettings = {
 	{"Side Bar Color:", formatColor(uiColor_SideBar), function(c) uiColor_SideBar = c end},
 	{"Text Color:", formatColor(uiColor_TextColor), function(c) uiColor_TextColor = c end},
 	{"Button Color:", formatColor(uiColor_ButtonColor), function(c) uiColor_ButtonColor = c end},
-	{"TextBox Background Color:", formatColor(uiColor_TextBoxColor), function(c) uiColor_TextBoxColor = c end}
+	{"TextBox Background Color:", formatColor(uiColor_TextBoxColor), function(c) uiColor_TextBoxColor = c end},
+    {"Toggle ON Color:", formatColor(uiColor_ToggleOnText), function(c) uiColor_ToggleOnText = c end},
+	{"Toggle OFF Color:", formatColor(uiColor_ToggleOffText), function(c) uiColor_ToggleOffText = c end}
 }
 
 for _, cfg in ipairs(colorSettings) do
@@ -6876,7 +7919,7 @@ local function createSlider(parent, labelText, min, max, getval, onval, fmt)
 	local container = create("Frame", {Size = UDim2.new(1, 0, 0, 36), BackgroundTransparency = 1, Parent = parent})
 	local label = create("TextLabel", {Size = UDim2.new(0.45, 0, 1, 0), BackgroundTransparency = 1, Text = labelText, TextColor3 = uiColor_TextColor, TextSize = 13, Font = FONT, TextXAlignment = Enum.TextXAlignment.Left, Parent = container})
 	table.insert(themeElements.Texts, label)
-	local valLabel = create("TextLabel", {Size = UDim2.new(0.5, 0, 0, 14), Position = UDim2.new(0.48, 0, 0.05, 0), BackgroundTransparency = 1, Text = fmt(getval()), TextColor3 = uiColor_TextColor, TextSize = 11, Font = FONT, TextXAlignment = Enum.TextXAlignment.Right, Parent = container})
+	local valLabel = create("TextLabel", {Size = UDim2.new(0.5, 0, 0, 14), Position = UDim2.new(0.48, 0, 0.05, 0), BackgroundTransparency = 1, Text = fmt(getval()), TextColor3 = uiColor_TextColor, TextSize = 13, Font = FONT, TextXAlignment = Enum.TextXAlignment.Right, Parent = container})
 	table.insert(themeElements.Texts, valLabel)
 	local track = create("TextButton", {Size = UDim2.new(0.5, 0, 0, 10), Position = UDim2.new(0.48, 0, 0.55, 0), BackgroundColor3 = uiColor_TextBoxColor, BorderColor3 = COL_BORDER, Text = "", Parent = container})
 	table.insert(themeElements.TextBoxes, track)
@@ -6963,7 +8006,9 @@ local function gatherConfig()
         SideBarColor = {uiColor_SideBar.R, uiColor_SideBar.G, uiColor_SideBar.B},
         TextColor = {uiColor_TextColor.R, uiColor_TextColor.G, uiColor_TextColor.B},
         ButtonColor = {uiColor_ButtonColor.R, uiColor_ButtonColor.G, uiColor_ButtonColor.B},
-        TextBoxColor = {uiColor_TextBoxColor.R, uiColor_TextBoxColor.G, uiColor_TextBoxColor.B}
+        TextBoxColor = {uiColor_TextBoxColor.R, uiColor_TextBoxColor.G, uiColor_TextBoxColor.B},
+        ToggleOnColor = {uiColor_ToggleOnText.R, uiColor_ToggleOnText.G, uiColor_ToggleOnText.B},
+        ToggleOffColor = {uiColor_ToggleOffText.R, uiColor_ToggleOffText.G, uiColor_ToggleOffText.B},
     }
     if AimAPI and AimAPI.Gather then cfg.Aim = AimAPI.Gather() end
     return cfg
@@ -6982,6 +8027,8 @@ local function applyConfigValues(cfg)
 	if cfg.TextColor then uiColor_TextColor = Color3.new(unpack(cfg.TextColor)) end
 	if cfg.ButtonColor then uiColor_ButtonColor = Color3.new(unpack(cfg.ButtonColor)) end
 	if cfg.TextBoxColor then uiColor_TextBoxColor = Color3.new(unpack(cfg.TextBoxColor)) end
+    if cfg.ToggleOnColor then uiColor_ToggleOnText = Color3.new(unpack(cfg.ToggleOnColor)) end
+	if cfg.ToggleOffColor then uiColor_ToggleOffText = Color3.new(unpack(cfg.ToggleOffColor)) end
 	applyTheme()
 	if cfg.Aim and AimAPI and AimAPI.Apply then
     	AimAPI.Apply(cfg.Aim)
@@ -7102,6 +8149,8 @@ createContentButton(tabFrames.Settings, "Reset defaults", function()
 	uiColor_TextColor = COL_TEXT
 	uiColor_ButtonColor = COL_BG
 	uiColor_TextBoxColor = COL_TEXTBOX
+    uiColor_ToggleOnText = Color3.fromRGB(100, 255, 100)
+	uiColor_ToggleOffText = Color3.fromRGB(255, 100, 100)
 	uiGuiOpacity = 1
 	uiImageOpacity = 1
 	uiBlurSize = 0
@@ -7129,6 +8178,11 @@ end
 tabs = {
 	{Frame = tabFrames.Main, Name = "Main Info"},
 	{Frame = tabFrames.Universal, Name = "Universal"},
+	{Frame = tabFrames.Character, Name = "Character"},
+	{Frame = tabFrames.Players, Name = "Players"},
+	{Frame = tabFrames.Visuals, Name = "Visuals"},
+	{Frame = tabFrames.Utilities, Name = "Utilities"},
+	{Frame = tabFrames.Server, Name = "Server"},
 	{Frame = tabFrames.Games, Name = "Games"},
 	{Frame = tabFrames.Scripts, Name = "Scripts"},
 	{Frame = tabFrames.Hubs, Name = "Script Hubs"},
@@ -7259,7 +8313,7 @@ table.insert(themeElements.TopBars, KeyTopBar)
 local KeyTitle = create("TextLabel", {Parent = KeyTopBar, Size = UDim2.new(1, -40, 1, 0), Position = UDim2.new(0, 10, 0, 0), BackgroundTransparency = 1, Text = "Fuck you! — Key System", TextColor3 = uiColor_TextColor, TextSize = 15, Font = FONT, TextXAlignment = Enum.TextXAlignment.Left})
 table.insert(themeElements.Texts, KeyTitle)
 
-local KeyCloseBtn = create("TextButton", {Parent = KeyTopBar, Size = UDim2.new(0, 35, 0, 35), Position = UDim2.new(1, -35, 0, 0), BackgroundColor3 = Color3.fromRGB(120, 40, 40), BorderColor3 = COL_BORDER, TextColor3 = Color3.fromRGB(255, 255, 255), Text = "X", TextSize = 14, Font = FONT})
+local KeyCloseBtn = create("TextButton", {Parent = KeyTopBar, Size = UDim2.new(0, 35, 0, 35), Position = UDim2.new(1, -35, 0, 0), BackgroundColor3 = Color3.fromRGB(120, 40, 40), BorderColor3 = COL_BORDER, TextColor3 = Color3.fromRGB(255, 255, 255), Text = "X", TextSize = 13, Font = FONT})
 KeyCloseBtn.MouseButton1Click:Connect(function() ScreenGui:Destroy() end)
 
 local KeyInfoLabel = create("TextLabel", {Parent = KeyWindow, Size = UDim2.new(1, -30, 0, 40), Position = UDim2.new(0, 15, 0, 50), BackgroundTransparency = 1, Text = "Please enter your access key below to load the script.\nKey can be obtained via Discord.", TextColor3 = uiColor_TextColor, TextSize = 13, Font = FONT, TextWrapped = true})
