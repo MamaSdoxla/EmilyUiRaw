@@ -38,7 +38,75 @@ local unlocked = false
 local beta = false -- true: только Tester и Coder; false: Free, User, Tester, Coder
 
 local function notify(title, text)
-	StarterGui:SetCore("SendNotification", {Title = title, Text = text, Duration = 15})
+    task.spawn(function()
+        local notificationData = {
+            Title = title,
+            Text = text,
+            Duration = 15
+        }
+
+        -- 1. Сначала пытаемся использовать стандартное уведомление Roblox
+        local coreSuccess = false
+        for _ = 1, 10 do
+            coreSuccess = pcall(function()
+                StarterGui:SetCore("SendNotification", notificationData)
+            end)
+            if coreSuccess then return end
+            task.wait(0.2)
+        end
+
+        -- 2. Если не вышло, создаем свое собственное кастомное уведомление
+        pcall(function()
+            local playerGui = LocalPlayer:FindFirstChildOfClass("PlayerGui")
+                or LocalPlayer:WaitForChild("PlayerGui", 5)
+
+            if not playerGui then return end
+
+            local gui = Instance.new("ScreenGui")
+            gui.Name = "FallbackNotification"
+            gui.ResetOnSpawn = false
+            gui.IgnoreGuiInset = true
+            gui.Parent = playerGui
+
+            local main = Instance.new("Frame")
+            main.AnchorPoint = Vector2.new(1, 1)
+            main.Position = UDim2.new(1, -16, 1, -16)
+            main.Size = UDim2.new(0, 300, 0, 64)
+            main.BackgroundColor3 = Color3.fromRGB(12, 12, 12) -- Цвет в стиле FuckYou UI
+            main.BorderColor3 = Color3.fromRGB(22, 22, 22)
+            main.BorderSizePixel = 1
+            main.Parent = gui
+
+            local titleLabel = Instance.new("TextLabel")
+            titleLabel.Size = UDim2.new(1, -16, 0, 20)
+            titleLabel.Position = UDim2.new(0, 8, 0, 6)
+            titleLabel.BackgroundTransparency = 1
+            titleLabel.Text = title
+            titleLabel.Font = Enum.Font.SpecialElite
+            titleLabel.TextSize = 14
+            titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+            titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+            titleLabel.Parent = main
+
+            local textLabel = Instance.new("TextLabel")
+            textLabel.Size = UDim2.new(1, -16, 0, 30)
+            textLabel.Position = UDim2.new(0, 8, 0, 26)
+            textLabel.BackgroundTransparency = 1
+            textLabel.Text = text
+            textLabel.Font = Enum.Font.SpecialElite
+            textLabel.TextSize = 12
+            textLabel.TextXAlignment = Enum.TextXAlignment.Left
+            textLabel.TextYAlignment = Enum.TextYAlignment.Top
+            textLabel.TextWrapped = true
+            textLabel.TextColor3 = Color3.fromRGB(139, 135, 127)
+            textLabel.Parent = main
+
+            -- Удаляем уведомление через указанное время
+            task.delay(notificationData.Duration or 15, function()
+                gui:Destroy()
+            end)
+        end)
+    end)
 end
 
 notify("Fuck you! v1.2", "To get key goto discord or ask for a permanent one.")
