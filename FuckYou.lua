@@ -122,6 +122,9 @@ local ScreenGui = create("ScreenGui", {Name = "FuckYouGui", ResetOnSpawn = false
 local themeElements = { MainWindow = {}, TopBars = {}, SideBars = {}, Texts = {}, Buttons = {}, TextBoxes = {}, FillBars = {}, CustomButtons = {} }
 local moduleToggles = {}  -- {btn, group} — кнопки‑тумблеры модулей в подкладке
 local toggleRegistry = {} -- [кнопка] = function() return состояние end
+local VisualsAPI = nil
+local AimAPI = nil
+local MovementAPI = nil
 local function scaleColor(c, f)
 	return Color3.fromRGB(math.clamp(c.R*255*f,0,255), math.clamp(c.G*255*f,0,255), math.clamp(c.B*255*f,0,255))
 end
@@ -206,6 +209,17 @@ local function saveConfig()
 		Fit = uiFitMode,
 		BackgroundFile = uiBackgroundFile,
 	}
+    if VisualsAPI and VisualsAPI.Gather then
+	    config.Visuals = VisualsAPI.Gather()
+    end
+
+    if AimAPI and AimAPI.Gather then
+	    config.Aim = AimAPI.Gather()
+    end
+
+    if MovementAPI and MovementAPI.Gather then
+	    config.Movement = MovementAPI.Gather()
+    end
 	local success, json = pcall(function() return HttpService:JSONEncode(config) end)
 	if success then
 		if makefolder then pcall(function() makefolder("EmilyUi") end) end
@@ -231,6 +245,19 @@ local function loadConfig()
 				if config.Blur then uiBlurSize = math.clamp(config.Blur, 0, 24) end
 				if config.Fit then uiFitMode = config.Fit end
 				if config.BackgroundFile ~= nil then uiBackgroundFile = config.BackgroundFile end
+                if unlocked then
+	                if config.Visuals and VisualsAPI and VisualsAPI.Apply then
+		                VisualsAPI.Apply(config.Visuals)
+	                end
+
+	                if config.Aim and AimAPI and AimAPI.Apply then
+    		            AimAPI.Apply(config.Aim)
+	                end
+
+	                if config.Movement and MovementAPI and MovementAPI.Apply then
+    		            MovementAPI.Apply(config.Movement)
+	                end
+                end
 			end
 		end
 	end
@@ -1142,16 +1169,11 @@ local function initDesyncModule()
         end
         local clean = string.match(tostring(id), "%d+") or id
         if desyncChar and desyncChar:FindFirstChildOfClass("Humanoid") then
-            local a = Instance.new("Animation")
-            a.AnimationId = "rbxassetid://" .. clean
+            local anim = Instance.new("Animation")
+            anim.AnimationId = "rbxassetid://" .. clean
             local hum = desyncChar:FindFirstChildOfClass("Humanoid")
             local an = hum:FindFirstChildOfClass("Animator") or Instance.new("Animator", hum)
-            local ok, tr =
-                pcall(
-                function()
-                    return an:LoadAnimation(a)
-                end
-            )
+            local ok, tr = pcall(function() return an:LoadAnimation(anim) end)
             if ok and tr then
                 curNormTrack = tr
                 curNormName = name
@@ -1741,16 +1763,11 @@ local function initDesyncModule()
                             end
                             if desyncChar and desyncChar:FindFirstChildOfClass("Humanoid") then
                                 local clean = string.match(tostring(id), "%d+") or id
-                                local a = Instance.new("Animation")
-                                a.AnimationId = "rbxassetid://" .. clean
+                                local anim = Instance.new("Animation")
+                                anim.AnimationId = "rbxassetid://" .. clean
                                 local hum = desyncChar:FindFirstChildOfClass("Humanoid")
                                 local an = hum:FindFirstChildOfClass("Animator") or Instance.new("Animator", hum)
-                                local ok, tr =
-                                    pcall(
-                                    function()
-                                        return an:LoadAnimation(a)
-                                    end
-                                )
+                                local ok, tr = pcall(function() return an:LoadAnimation(anim) end)
                                 if ok and tr then
                                     activeTrack = tr
                                     tr.Looped = looped
@@ -2731,22 +2748,50 @@ local function extraSlider(parent, labelText, min, max, decimals, default, getva
 end
 
 local function extraToggle(parent, labelText, initial, callback)
-	local state = initial and true or false
-	local btn = create("TextButton", {Size = UDim2.new(1, 0, 0, 30), BackgroundColor3 = uiColor_ButtonColor, BorderColor3 = COL_BORDER, BackgroundTransparency = 1 - uiGuiOpacity, TextColor3 = uiColor_TextColor, Text = "", Font = FONT, TextSize = 13, Parent = parent})
+	local obj = {State = initial and true or false}
+
+	local btn = create("TextButton", {
+		Size = UDim2.new(1, 0, 0, 30),
+		BackgroundColor3 = uiColor_ButtonColor,
+		BorderColor3 = COL_BORDER,
+		BackgroundTransparency = 1 - uiGuiOpacity,
+		TextColor3 = uiColor_TextColor,
+		Text = "",
+		Font = FONT,
+		TextSize = 13,
+		Parent = parent
+	})
+
+	obj.Button = btn
+
 	table.insert(themeElements.CustomButtons, btn)
 	table.insert(themeElements.Texts, btn)
+
 	local function paint()
-		btn.Text = labelText .. ": " .. (state and "ON" or "OFF")
-		paintToggleBtn(btn, state)
+		btn.Text = labelText .. ": " .. (obj.State and "ON" or "OFF")
+		paintToggleBtn(btn, obj.State)
 	end
-	paint()
-	registerToggle(btn, function() return state end)
-	btn.MouseButton1Click:Connect(function()
-		state = not state
+
+	function obj:Get()
+		return self.State
+	end
+
+	function obj:Set(v)
+		self.State = v and true or false
 		paint()
-		if callback then callback(state) end
+		if callback then
+			callback(self.State)
+		end
+	end
+
+	paint()
+	registerToggle(btn, function() return obj.State end)
+
+	btn.MouseButton1Click:Connect(function()
+		obj:Set(not obj.State)
 	end)
-	return btn
+
+	return obj
 end
 
 local function extraDropdown(parent, labelText, options, getcur, onselect)
@@ -3249,14 +3294,16 @@ local ccEff = Instance.new("ColorCorrectionEffect", LightingService)
 ccEff.Saturation = 0
 ccEff.Contrast = 0
 
+local visToggles = {}
+
 createSection(tabFrames.Visuals, "Visuals")
-extraToggle(tabFrames.Visuals, "Crosshair", false, setCrosshair)
+visToggles.Crosshair = extraToggle(tabFrames.Visuals, "Crosshair", false, setCrosshair)
 extraSlider(tabFrames.Visuals, "FOV", 30, 120, 0, nil,
 	function() return VisualSettings.FOV end,
 	function(v) applyFOV(v) end,
 	function(v) return tostring(v) end)
-extraToggle(tabFrames.Visuals, "Fullbright", false, setFullbright)
-extraToggle(tabFrames.Visuals, "Trails", false, function(on)
+visToggles.Fullbright = extraToggle(tabFrames.Visuals, "Fullbright", false, setFullbright)
+visToggles.Trails = extraToggle(tabFrames.Visuals, "Trails", false, function(on)
 	TrailSettings.Enabled = on
 	rebuildTrails()
 end)
@@ -3300,8 +3347,8 @@ extraSlider(tabFrames.Visuals, "Aspect Vertical", 10, 100, 0, 100,
 	function() return VisualSettings.AspectV end,
 	function(v) VisualSettings.AspectV = v updateAspectLoop() end,
 	function(v) return v .. "%" end)
-extraToggle(tabFrames.Visuals, "World Color", false, function(on)
-    worldColorEff.Enabled = on
+visToggles.WorldColor = extraToggle(tabFrames.Visuals, "World Color", false, function(on)
+	worldColorEff.Enabled = on
 end)
 extraColorInput(tabFrames.Visuals, "World Color", function() return WorldColorVal end, function(c)
     WorldColorVal = c
@@ -3338,6 +3385,228 @@ RunService.Heartbeat:Connect(function(dt)
 		if cam and r then dofEff.FocusDistance = (cam.CFrame.Position - r.Position).Magnitude end
 	end
 end)
+
+VisualsAPI = {
+	Gather = function()
+		return {
+			Crosshair = (visToggles.Crosshair and visToggles.Crosshair:Get()) or (crosshairGui ~= nil),
+			Fullbright = (visToggles.Fullbright and visToggles.Fullbright:Get()) or fullbrightOn,
+			FOV = VisualSettings.FOV,
+			AspectH = VisualSettings.AspectH,
+			AspectV = VisualSettings.AspectV,
+
+			Trails = {
+				Enabled = TrailSettings.Enabled,
+				Mode = TrailSettings.Mode,
+				Source = TrailSettings.Source,
+				ColorA = {
+					math.floor(TrailSettings.ColorA.R * 255 + 0.5),
+					math.floor(TrailSettings.ColorA.G * 255 + 0.5),
+					math.floor(TrailSettings.ColorA.B * 255 + 0.5)
+				},
+				ColorB = {
+					math.floor(TrailSettings.ColorB.R * 255 + 0.5),
+					math.floor(TrailSettings.ColorB.G * 255 + 0.5),
+					math.floor(TrailSettings.ColorB.B * 255 + 0.5)
+				},
+				ColorC = {
+					math.floor(TrailSettings.ColorC.R * 255 + 0.5),
+					math.floor(TrailSettings.ColorC.G * 255 + 0.5),
+					math.floor(TrailSettings.ColorC.B * 255 + 0.5)
+				},
+				Length = TrailSettings.Length,
+				FadeSpeed = TrailSettings.FadeSpeed,
+				ColorSpeed = TrailSettings.ColorSpeed,
+			},
+
+			WorldColorEnabled = (visToggles.WorldColor and visToggles.WorldColor:Get()) or worldColorEff.Enabled,
+			WorldColor = {
+				math.floor(WorldColorVal.R * 255 + 0.5),
+				math.floor(WorldColorVal.G * 255 + 0.5),
+				math.floor(WorldColorVal.B * 255 + 0.5)
+			},
+			WorldColorStrength = WorldColorStrength,
+
+			DoF = VisualSettings.DoF,
+			Saturation = VisualSettings.Saturation,
+			Contrast = VisualSettings.Contrast,
+		}
+	end,
+
+	Apply = function(d)
+		if type(d) ~= "table" then return end
+
+		local function clampNum(v, min, max, def)
+			v = tonumber(v)
+			if v == nil then return def end
+			return math.clamp(v, min, max)
+		end
+
+		local function colFromArr(arr, def)
+			if type(arr) ~= "table" then return def end
+			return Color3.fromRGB(
+				math.clamp(tonumber(arr[1]) or math.floor(def.R * 255), 0, 255),
+				math.clamp(tonumber(arr[2]) or math.floor(def.G * 255), 0, 255),
+				math.clamp(tonumber(arr[3]) or math.floor(def.B * 255), 0, 255)
+			)
+		end
+
+		VisualSettings.FOV = clampNum(d.FOV, 30, 120, 70)
+		applyFOV(VisualSettings.FOV)
+
+		VisualSettings.AspectH = clampNum(d.AspectH, 10, 100, 100)
+		VisualSettings.AspectV = clampNum(d.AspectV, 10, 100, 100)
+		updateAspectLoop()
+
+		VisualSettings.DoF = clampNum(d.DoF, 0, 200, 0)
+		dofEff.Enabled = VisualSettings.DoF > 0
+		dofEff.FarIntensity = VisualSettings.DoF / 100
+		dofEff.NearIntensity = VisualSettings.DoF / 200
+
+		VisualSettings.Saturation = clampNum(d.Saturation, 0, 200, 100)
+		ccEff.Saturation = (VisualSettings.Saturation - 100) / 100
+
+		VisualSettings.Contrast = clampNum(d.Contrast, 0, 200, 100)
+		ccEff.Contrast = (VisualSettings.Contrast - 100) / 100
+
+		if type(d.Trails) == "table" then
+			local t = d.Trails
+
+			TrailSettings.Enabled = t.Enabled and true or false
+
+			if t.Mode == "Solid" or t.Mode == "TwoWay" or t.Mode == "ThreeWay" or t.Mode == "Rainbow" then
+				TrailSettings.Mode = t.Mode
+			end
+
+			if t.Source == "All" or t.Source == "Body" or t.Source == "Arms" or t.Source == "Legs" or t.Source == "Legs+Arms" then
+				TrailSettings.Source = t.Source
+			end
+
+			TrailSettings.ColorA = colFromArr(t.ColorA, Color3.fromRGB(255, 255, 255))
+			TrailSettings.ColorB = colFromArr(t.ColorB, Color3.fromRGB(80, 255, 120))
+			TrailSettings.ColorC = colFromArr(t.ColorC, Color3.fromRGB(255, 170, 0))
+
+			TrailSettings.Length = clampNum(t.Length, 0.1, 5, 0.6)
+			TrailSettings.FadeSpeed = clampNum(t.FadeSpeed, 0.2, 10, 1)
+			TrailSettings.ColorSpeed = clampNum(t.ColorSpeed, 0.1, 10, 1)
+
+			if trailModeBtn then
+				trailModeBtn.Text = "Trail Color Mode: " .. TrailSettings.Mode
+			end
+		end
+
+		if d.Crosshair ~= nil then
+			if visToggles.Crosshair then
+				visToggles.Crosshair:Set(d.Crosshair and true or false)
+			else
+				setCrosshair(d.Crosshair and true or false)
+			end
+		end
+
+		if d.Fullbright ~= nil then
+			if visToggles.Fullbright then
+				visToggles.Fullbright:Set(d.Fullbright and true or false)
+			else
+				setFullbright(d.Fullbright and true or false)
+			end
+		end
+
+		if type(d.WorldColor) == "table" then
+			WorldColorVal = colFromArr(d.WorldColor, Color3.fromRGB(255, 255, 255))
+		end
+
+		if d.WorldColorStrength ~= nil then
+			WorldColorStrength = clampNum(d.WorldColorStrength, 0, 100, 100)
+		end
+
+		applyWorldColor()
+
+		if d.WorldColorEnabled ~= nil then
+			if visToggles.WorldColor then
+				visToggles.WorldColor:Set(d.WorldColorEnabled and true or false)
+			else
+				worldColorEff.Enabled = d.WorldColorEnabled and true or false
+			end
+		end
+
+		if type(d.Trails) == "table" then
+			if visToggles.Trails then
+				visToggles.Trails:Set(TrailSettings.Enabled)
+			else
+				rebuildTrails()
+			end
+		end
+
+		if updateTrailVis then
+			updateTrailVis()
+		end
+	end,
+
+	Reset = function()
+		VisualSettings.FOV = 70
+		VisualSettings.DoF = 0
+		VisualSettings.Saturation = 100
+		VisualSettings.Contrast = 100
+		VisualSettings.AspectH = 100
+		VisualSettings.AspectV = 100
+
+		applyFOV(70)
+		updateAspectLoop()
+
+		dofEff.Enabled = false
+		dofEff.FarIntensity = 0
+		dofEff.NearIntensity = 0
+
+		ccEff.Saturation = 0
+		ccEff.Contrast = 0
+
+		TrailSettings.Enabled = false
+		TrailSettings.Mode = "Solid"
+		TrailSettings.Source = "All"
+		TrailSettings.ColorA = Color3.fromRGB(255, 255, 255)
+		TrailSettings.ColorB = Color3.fromRGB(80, 255, 120)
+		TrailSettings.ColorC = Color3.fromRGB(255, 170, 0)
+		TrailSettings.Length = 0.6
+		TrailSettings.FadeSpeed = 1
+		TrailSettings.ColorSpeed = 1
+
+		if trailModeBtn then
+			trailModeBtn.Text = "Trail Color Mode: Solid"
+		end
+
+		if visToggles.Crosshair then
+			visToggles.Crosshair:Set(false)
+		else
+			setCrosshair(false)
+		end
+
+		if visToggles.Fullbright then
+			visToggles.Fullbright:Set(false)
+		else
+			setFullbright(false)
+		end
+
+		if visToggles.Trails then
+			visToggles.Trails:Set(false)
+		else
+			rebuildTrails()
+		end
+
+		WorldColorVal = Color3.fromRGB(255, 255, 255)
+		WorldColorStrength = 100
+		applyWorldColor()
+
+		if visToggles.WorldColor then
+			visToggles.WorldColor:Set(false)
+		else
+			worldColorEff.Enabled = false
+		end
+
+		if updateTrailVis then
+			updateTrailVis()
+		end
+	end
+}
 
 ------------------------------------------------------------
 -- 4) UTILITIES
@@ -3391,6 +3660,18 @@ local function fmtHMS(sec)
 	return string.format("%02d:%02d:%02d", math.floor(sec / 3600), math.floor((sec % 3600) / 60), sec % 60)
 end
 
+local function getServerUptime()
+	local ok, t = pcall(function()
+		return workspace.DistributedGameTime
+	end)
+
+	if ok and typeof(t) == "number" and t >= 0 then
+		return t
+	end
+
+	return os.clock() - sessionStart
+end
+
 createSection(tabFrames.Server, "This Server")
 local srvPlaceL = createLabel(tabFrames.Server, "Place: " .. game.PlaceId)
 local srvJobL = createLabel(tabFrames.Server, "Job: " .. (game.JobId ~= "" and game.JobId or "none"))
@@ -3437,7 +3718,7 @@ task.spawn(function()
 		pcall(function()
 			srvUsersL.Text = "Users: " .. #Players:GetPlayers() .. "/" .. Players.MaxPlayers
 			srvPingL.Text = "Ping: " .. math.floor(StatsService.PerformanceStats.Ping:GetValue()) .. " ms"
-			srvUptimeL.Text = "Uptime: " .. fmtHMS(os.clock() - sessionStart)
+			srvUptimeL.Text = "Uptime: " .. fmtHMS(getServerUptime())
 			sesPlayL.Text = "Playtime: " .. fmtHMS(os.clock() - sessionStart)
 			sesDeathsL.Text = "Deaths: " .. sessionDeaths
 			sesWalkL.Text = "Walked: " .. math.floor(sessionWalked) .. " studs"
@@ -5575,7 +5856,7 @@ local function initAimbotModule(desyncTabs, musicTabs)
 
     return { Tabs = aimTabs, Gather = gatherAimConfig, Apply = applyAimConfig, Reset = resetAimDefaults }
 end
-local AimAPI = initAimbotModule(desyncTabs, musicTabs)
+AimAPI = initAimbotModule(desyncTabs, musicTabs)
 
 -- =========================================================
 -- ========== MOVEMENT RECORDER MODULE =====================
@@ -7909,24 +8190,141 @@ local function initMovementModule(desyncTabs, musicTabs, aimTabs)
     	paintToggleBtn(MovementSidebarToggle, MovementEnabled)
     end
     refreshMovementToggleText()
-    MovementSidebarToggle.MouseButton1Click:Connect(function()
-    	MovementEnabled = not MovementEnabled
-    	if MovementEnabled then
-		    pcall(function() markersFolder.Parent = workspace end)
-		    if setStatus then setStatus("Movement enabled.") end
-	    else
-    		pcall(stopRecording, false)
-		    pcall(stopPlayback)
-		    pcall(function() markersFolder.Parent = nil end)
-		    if setStatus then setStatus("Movement disabled.") end
-	    end
-	    refreshMovementToggleText()
-    end)
+    local function setMovementEnabled(v)
+	MovementEnabled = v and true or false
 
-	return movementTabs
+	if MovementEnabled then
+		pcall(function() markersFolder.Parent = workspace end)
+		if setStatus then setStatus("Movement enabled.") end
+	else
+		pcall(stopRecording, false)
+		pcall(stopPlayback)
+		pcall(function() markersFolder.Parent = nil end)
+		if setStatus then setStatus("Movement disabled.") end
+	end
+
+	refreshMovementToggleText()
 end
 
-local movementTabs = initMovementModule(desyncTabs, musicTabs, AimAPI.Tabs)
+MovementSidebarToggle.MouseButton1Click:Connect(function()
+	setMovementEnabled(not MovementEnabled)
+end)
+
+local function deepCopyMovement(t)
+	local ok, json = pcall(function() return HttpService:JSONEncode(t) end)
+	if not ok then return {} end
+
+	local ok2, out = pcall(function() return HttpService:JSONDecode(json) end)
+	if ok2 and type(out) == "table" then
+		return out
+	end
+
+	return {}
+end
+
+local MovementDefaults = {
+	Settings = deepCopyMovement(Settings),
+	Keybinds = deepCopyMovement(Keybinds),
+}
+
+local function gatherMovementConfig()
+	return {
+		Enabled = MovementEnabled,
+		Settings = deepCopyMovement(Settings),
+		Keybinds = deepCopyMovement(Keybinds),
+		SelectedCategory = selectedCategory,
+		SelectedRecording = selectedRecording and selectedRecording.Name or "",
+	}
+end
+
+local function applyMovementConfig(cfg)
+	if type(cfg) ~= "table" then return end
+
+	if type(cfg.Settings) == "table" then
+		local s = cfg.Settings
+
+		for _, k in ipairs({"CircleMode", "PathMode", "LabelMode"}) do
+			if s[k] == "Gradient" then s[k] = "TwoWay" end
+			if s[k] == "TriColor" then s[k] = "ThreeWay" end
+		end
+
+		for k, v in pairs(s) do
+			if Settings[k] ~= nil and type(v) == type(Settings[k]) then
+				Settings[k] = v
+			end
+		end
+
+		for _, k in ipairs({"CircleMode", "PathMode", "LabelMode"}) do
+			if not table.find(COLOR_MODES, Settings[k]) then
+				Settings[k] = "Solid"
+			end
+		end
+	end
+
+	if type(cfg.Keybinds) == "table" then
+		for k, v in pairs(cfg.Keybinds) do
+			if Keybinds[k] ~= nil and type(v) == "string" then
+				Keybinds[k] = v
+			end
+		end
+	end
+
+	if type(cfg.SelectedCategory) == "string" and library.categories[cfg.SelectedCategory] then
+		selectedCategory = cfg.SelectedCategory
+	end
+
+	selectedRecording = nil
+
+	if type(cfg.SelectedRecording) == "string" and cfg.SelectedRecording ~= "" then
+		for _, e in ipairs(library.categories[selectedCategory] or {}) do
+			if e.Name == cfg.SelectedRecording then
+				selectedRecording = e
+				break
+			end
+		end
+	end
+
+	saveSettings()
+
+	if applyPromptKey then applyPromptKey() end
+	if refreshCategories then refreshCategories() end
+	if refreshRecordings then refreshRecordings() end
+	if refreshMainInfo then refreshMainInfo() end
+	if rebuildMarkers then rebuildMarkers() end
+	if updateButtons then updateButtons() end
+
+	if cfg.Enabled ~= nil then
+		setMovementEnabled(cfg.Enabled and true or false)
+	end
+end
+
+local function resetMovementConfig()
+	Settings = deepCopyMovement(MovementDefaults.Settings)
+	Keybinds = deepCopyMovement(MovementDefaults.Keybinds)
+
+	selectedCategory = "Default"
+	selectedRecording = nil
+
+	saveSettings()
+
+	if applyPromptKey then applyPromptKey() end
+	if refreshCategories then refreshCategories() end
+	if refreshRecordings then refreshRecordings() end
+	if refreshMainInfo then refreshMainInfo() end
+	if rebuildMarkers then rebuildMarkers() end
+	if updateButtons then updateButtons() end
+
+	setMovementEnabled(false)
+end
+
+return {
+Tabs = movementTabs,
+Gather = gatherMovementConfig,
+Apply = applyMovementConfig,
+Reset = resetMovementConfig,
+}
+end
+MovementAPI = initMovementModule(desyncTabs, musicTabs, AimAPI.Tabs)
 
 -- =========================================================
 -- ========= MOVEMENT RECORDER MODULE END ==================
@@ -8134,9 +8532,20 @@ local function gatherConfig()
         ToggleOnColor = {uiColor_ToggleOnText.R, uiColor_ToggleOnText.G, uiColor_ToggleOnText.B},
         ToggleOffColor = {uiColor_ToggleOffText.R, uiColor_ToggleOffText.G, uiColor_ToggleOffText.B},
     }
-    if AimAPI and AimAPI.Gather then cfg.Aim = AimAPI.Gather() end
+    if VisualsAPI and VisualsAPI.Gather then
+	    cfg.Visuals = VisualsAPI.Gather()
+    end
+
+    if AimAPI and AimAPI.Gather then
+	    cfg.Aim = AimAPI.Gather()
+    end
+
+    if MovementAPI and MovementAPI.Gather then
+	    cfg.Movement = MovementAPI.Gather()
+    end
+
     return cfg
-end
+    end
 
 local function applyConfigValues(cfg)
 	if type(cfg.ToggleKey) == "string" then
@@ -8154,9 +8563,19 @@ local function applyConfigValues(cfg)
     if cfg.ToggleOnColor then uiColor_ToggleOnText = Color3.new(unpack(cfg.ToggleOnColor)) end
 	if cfg.ToggleOffColor then uiColor_ToggleOffText = Color3.new(unpack(cfg.ToggleOffColor)) end
 	applyTheme()
-	if cfg.Aim and AimAPI and AimAPI.Apply then
-    	AimAPI.Apply(cfg.Aim)
-	end
+	if unlocked then
+	    if cfg.Visuals and VisualsAPI and VisualsAPI.Apply then
+		    VisualsAPI.Apply(cfg.Visuals)
+	    end
+
+	    if cfg.Aim and AimAPI and AimAPI.Apply then
+		    AimAPI.Apply(cfg.Aim)
+	    end
+
+	    if cfg.Movement and MovementAPI and MovementAPI.Apply then
+		    MovementAPI.Apply(cfg.Movement)
+	    end
+    end
 end
 
 local function loadNamedConfig(name)
@@ -8287,6 +8706,14 @@ createContentButton(tabFrames.Settings, "Reset defaults", function()
 	saveConfig()
 	notify("Configs", "Settings reset to defaults")
 	if AimAPI and AimAPI.Reset then AimAPI.Reset() end
+
+    if VisualsAPI and VisualsAPI.Reset then
+	    VisualsAPI.Reset()
+    end
+
+    if MovementAPI and MovementAPI.Reset then
+	    MovementAPI.Reset()
+    end
 end)
 
 refreshConfigList()
@@ -8552,11 +8979,21 @@ end
 local function unlockScript(userGroup, daysLeft)
 	unlocked = true
 	playUnlockJingle()
-
 	KeyWindow:Destroy()
 	FuckYou.Visible = true
 	state = "full"
 	updateProfilePanel(userGroup or "Free", daysLeft)
+
+	loadConfig()
+	applyBackground()
+	updateBlur()
+	applyTheme()
+
+	local lastCfgName = getLastConfigName()
+	if lastCfgName then
+		loadNamedConfig(lastCfgName)
+	end
+
 	notify("Fuck you! is loaded", "Welcome! Role: " .. (userGroup or "User"))
 end
 
@@ -8633,8 +9070,7 @@ BtnSubmit.Position = UDim2.new(0.5, -75, 0, 240)
 
 --// Автозагрузка последнего выбранного конфига (теперь ПОСЛЕ создания окна ключей,
 --// чтобы applyTheme() перекрасил и его)
-local lastCfgName = getLastConfigName()
-if lastCfgName then loadNamedConfig(lastCfgName) end
+-- Автозагрузка конфига перенесена в unlockScript
 
 --// Принудительно применяем текущую тему (цвета + прозрачность) ко всему, включая KeyWindow
 applyTheme()
