@@ -280,10 +280,42 @@ end
 FuckYou:GetPropertyChangedSignal("Visible"):Connect(updateBlur)
 ScreenGui.Destroying:Connect(function() blurEffect.Enabled = false; blurEffect.Parent = nil end)
 
+local function fileExists(path)
+    if typeof(isfile) ~= "function" then
+        return true -- unknown executor support, let pcall handle it
+    end
+
+    local ok, exists = pcall(isfile, path)
+    return ok and exists == true
+end
+
 local function customAsset(path)
-	if getcustomasset then return getcustomasset(path) end
-	if GetCustomAsset then return GetCustomAsset(path) end
-	return nil
+    if typeof(path) ~= "string" or path == "" then
+        return nil
+    end
+
+    -- If the executor supports isfile, verify the file exists first.
+    if typeof(isfile) == "function" and not fileExists(path) then
+        return nil
+    end
+
+    -- Safely try getcustomasset.
+    if typeof(getcustomasset) == "function" then
+        local ok, asset = pcall(getcustomasset, path)
+        if ok and typeof(asset) == "string" and asset ~= "" then
+            return asset
+        end
+    end
+
+    -- Safely try alternative name.
+    if typeof(GetCustomAsset) == "function" then
+        local ok, asset = pcall(GetCustomAsset, path)
+        if ok and typeof(asset) == "string" and asset ~= "" then
+            return asset
+        end
+    end
+
+    return nil
 end
 
 local function getBackgroundFiles()
@@ -323,16 +355,40 @@ local function getScaleType(name)
 end
 
 local function applyBackground()
-	local asset = (uiBackgroundFile ~= "") and customAsset(BG_FOLDER .. "/" .. uiBackgroundFile) or nil
-	if asset and not uiCollapsed then
-		BackgroundImage.Image = asset
-		BackgroundImage.ScaleType = getScaleType(uiFitMode)
-		BackgroundImage.ImageTransparency = 1 - uiImageOpacity
-		BackgroundImage.Visible = true
-	else
-		BackgroundImage.Visible = false
-		BackgroundImage.Image = ""
-	end
+    local asset = nil
+
+    if typeof(uiBackgroundFile) ~= "string" then
+        uiBackgroundFile = ""
+    end
+
+    if uiBackgroundFile ~= "" and not uiCollapsed then
+        local path = BG_FOLDER .. "/" .. uiBackgroundFile
+
+        -- If the file is missing, reset background setting so it stops trying to load it.
+        if typeof(isfile) == "function" then
+            local ok, exists = pcall(isfile, path)
+            if ok and not exists then
+                uiBackgroundFile = ""
+                pcall(function()
+                    saveConfig()
+                end)
+            else
+                asset = customAsset(path)
+            end
+        else
+            asset = customAsset(path)
+        end
+    end
+
+    if asset and not uiCollapsed then
+        BackgroundImage.Image = asset
+        BackgroundImage.ScaleType = getScaleType(uiFitMode)
+        BackgroundImage.ImageTransparency = 1 - uiImageOpacity
+        BackgroundImage.Visible = true
+    else
+        BackgroundImage.Visible = false
+        BackgroundImage.Image = ""
+    end
 end
 
 applyBackground()
