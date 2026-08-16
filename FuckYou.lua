@@ -696,7 +696,7 @@ local GamePlaces = {
 		{ type = "label", text = "Murder vs Sherif 2" },
 		{ type = "button", text = "Polo MVS", cb = function() loadstring(game:HttpGet("https://raw.githubusercontent.com/polo242c/mvs/main/mvs"))() end },
 		{ type = "button", text = "CyberCoders", cb = function() loadstring(game:HttpGet("https://rawscripts.net/raw/Murderers-VS-Sheriffs-DUELS-CyberCoders-Menu-II-193913"))() end },
-		{ type = "button", text = "Wic1k", cb = function() loadstring(game:HttpGet("https:// raw.githubusercontent.com/Wic1k/Scripts/refs/heads/main/mvsd.txt"))() end },
+		{ type = "button", text = "Wic1k", cb = function() loadstring(game:HttpGet("https://raw.githubusercontent.com/Wic1k/Scripts/refs/heads/main/mvsd.txt"))() end },
 	},
 	["7041939546"] = {
 		{ type = "label", text = "Catalog Avatar Creator" },
@@ -2925,7 +2925,12 @@ end
 -- 1) CHARACTER
 ------------------------------------------------------------
 local CharSettings = {Speed = 16, Jump = 50, Gravity = 196.2}
+local SpinSettings = { Enabled = false, Speed = 180 }
+local CharacterKeybinds = { SpinToggle = Enum.KeyCode.V }
+
 local infJumpConn, afkConn = nil, nil
+local spinConn = nil
+local spinToggleObj = nil
 
 local function applyCharStats()
 	local h = getMyHum()
@@ -2947,6 +2952,34 @@ local function setInfiniteJump(on)
 		infJumpConn = nil
 	end
 end
+
+local function updateSpin()
+if SpinSettings.Enabled and spinConn == nil then
+spinConn = RunService.Heartbeat:Connect(function(dt)
+local root = getMyRoot()
+if root then
+local angle = math.rad(SpinSettings.Speed) * dt
+root.CFrame = root.CFrame * CFrame.Angles(0, angle, 0)
+end
+end)
+elseif not SpinSettings.Enabled and spinConn then
+spinConn:Disconnect()
+spinConn = nil
+end
+end
+
+UserInputService.InputBegan:Connect(function(input, gpe)
+if gpe then return end
+
+if input.KeyCode == CharacterKeybinds.SpinToggle then
+SpinSettings.Enabled = not SpinSettings.Enabled
+updateSpin()
+
+if spinToggleObj then
+spinToggleObj:Set(SpinSettings.Enabled)
+end
+end
+end)
 
 local function setAntiAFK(on)
 	if on and not afkConn then
@@ -2978,6 +3011,41 @@ extraSlider(tabFrames.Character, "Gravity", 0, 3000, 1, 196.2,
 	function(v) return string.format("%.1f", v) end)
 extraToggle(tabFrames.Character, "Infinite Jump", false, setInfiniteJump)
 extraToggle(tabFrames.Character, "Anti-AFK", false, setAntiAFK)
+
+spinToggleObj = extraToggle(tabFrames.Character, "Spin", SpinSettings.Enabled, function(on)
+SpinSettings.Enabled = on
+updateSpin()
+end)
+
+extraSlider(tabFrames.Character, "Spin Speed (0-360)", 0, 360, 0, SpinSettings.Speed,
+function() return SpinSettings.Speed end,
+function(v) SpinSettings.Speed = v end,
+function(v) return v .. "°" end)
+
+local spinBindBtn = createContentButton(tabFrames.Character, "Spin Key: [" .. CharacterKeybinds.SpinToggle.Name .. "]", function()
+spinBindBtn.Text = "Spin Key: [PRESS ANY KEY]"
+
+local conn
+conn = UserInputService.InputBegan:Connect(function(input, gpe)
+if gpe then return end
+
+if input.KeyCode ~= Enum.KeyCode.Unknown then
+CharacterKeybinds.SpinToggle = input.KeyCode
+spinBindBtn.Text = "Spin Key: [" .. input.KeyCode.Name .. "]"
+
+if conn then
+conn:Disconnect()
+end
+end
+end)
+
+task.delay(5, function()
+if conn and conn.Connected then
+conn:Disconnect()
+spinBindBtn.Text = "Spin Key: [" .. CharacterKeybinds.SpinToggle.Name .. "]"
+end
+end)
+end)
 
 LocalPlayer.CharacterAdded:Connect(function()
 	task.wait(0.1)
@@ -5022,7 +5090,18 @@ local function initAimbotModule(desyncTabs, musicTabs)
     local Keybinds = {
         ToggleLegitBot = Enum.KeyCode.G,
         ToggleRagebot = Enum.KeyCode.H,
+        ToggleHitbox = Enum.KeyCode.J,
     }
+
+    --// Hitbox
+    local Hitbox = {
+        Enabled = false,
+        Part = "Head", -- Head / RootPart
+        Size = 5,      -- 1..20
+    }
+
+local hitboxOriginalSizes = {}
+local setHitboxEnabled
 
     --// Safe enum lookup
     local KEYCODE_BY_NAME = {}
@@ -5096,6 +5175,12 @@ local function initAimbotModule(desyncTabs, musicTabs)
                 Keybind = enumKeyName(Rage.Keybind),
             },
 
+            Hitbox = {
+                Enabled = Hitbox.Enabled,
+                Part = Hitbox.Part,
+                Size = Hitbox.Size,
+            },
+
             ESP = {
                 Enabled = ESPSettings.Enabled,
                 Color = {
@@ -5112,6 +5197,7 @@ local function initAimbotModule(desyncTabs, musicTabs)
             Keybinds = {
                 ToggleLegitBot = enumKeyName(Keybinds.ToggleLegitBot),
                 ToggleRagebot = enumKeyName(Keybinds.ToggleRagebot),
+                ToggleHitbox = enumKeyName(Keybinds.ToggleHitbox),
             },
         }
     end
@@ -5161,6 +5247,7 @@ local function initAimbotModule(desyncTabs, musicTabs)
     local refreshSidebarTexts
 
     local uiRefreshers = {}
+    local uiRefs = {}
     local function addRefresh(fn)
         table.insert(uiRefreshers, fn)
     end
@@ -5373,9 +5460,116 @@ local function initAimbotModule(desyncTabs, musicTabs)
 	    return false
     end
 
+    local function getHitboxPartName()
+    if Hitbox.Part == "RootPart" then
+        return "HumanoidRootPart"
+    end
+    return "Head"
+end
+
+local function applyHitboxToPlayer(player)
+    if player == LocalPlayer then
+        return
+    end
+
+    local char = player.Character
+    if not char then
+        return
+    end
+
+    local partName = getHitboxPartName()
+        local part = char:FindFirstChild(partName)
+        if not part then
+            return
+        end
+
+        if not hitboxOriginalSizes[player] then
+            hitboxOriginalSizes[player] = {}
+        end
+
+        if not hitboxOriginalSizes[player][partName] then
+            hitboxOriginalSizes[player][partName] = part.Size
+        end
+
+        local s = math.clamp(Hitbox.Size, 1, 20)
+        part.Size = Vector3.new(s, s, s)
+        part.CanCollide = false
+    end
+
+    local function removeHitboxFromPlayer(player)
+        if player == LocalPlayer then
+            return
+        end
+
+        local char = player.Character
+        if not char then
+            return
+        end
+
+        if not hitboxOriginalSizes[player] then
+            return
+        end
+
+        for partName, originalSize in pairs(hitboxOriginalSizes[player]) do
+            local part = char:FindFirstChild(partName)
+            if part then
+                part.Size = originalSize
+                part.CanCollide = true
+            end
+        end
+
+        hitboxOriginalSizes[player] = nil
+    end
+
+    local function refreshHitboxes()
+        for _, player in ipairs(Players:GetPlayers()) do
+            if player ~= LocalPlayer then
+                if Hitbox.Enabled then
+                    removeHitboxFromPlayer(player)
+                    applyHitboxToPlayer(player)
+                else
+                    removeHitboxFromPlayer(player)
+                end
+            end
+        end
+    end
+
+    local function hookHitboxCharacter(player)
+        player.CharacterAdded:Connect(
+            function()
+                if Hitbox.Enabled then
+                    task.wait(0.5)
+                    applyHitboxToPlayer(player)
+                end
+            end
+        )
+    end
+
+    for _, p in ipairs(Players:GetPlayers()) do
+        hookHitboxCharacter(p)
+    end
+
+    Players.PlayerAdded:Connect(hookHitboxCharacter)
+
+    Players.PlayerRemoving:Connect(
+        function(p)
+            hitboxOriginalSizes[p] = nil
+        end
+    )
+
+
     local function getAimParts(character, mode)
         local parts = {}
         if not character then return parts end
+
+        -- Если Hitbox включён, LegitBot/Ragebot целятся в увеличенную hitbox-часть
+        if Hitbox.Enabled then
+            local hbPart = character:FindFirstChild(getHitboxPartName())
+            if hbPart then
+                table.insert(parts, hbPart)
+                return parts
+            end
+        end
 
         if mode == "Head" then
             local head = character:FindFirstChild("Head")
@@ -5837,6 +6031,10 @@ local function initAimbotModule(desyncTabs, musicTabs)
 
             if sameInput(input, Keybinds.ToggleRagebot) then
                 setRageEnabled(not Rage.Enabled)
+            end
+
+            if sameInput(input, Keybinds.ToggleHitbox) then
+                setHitboxEnabled(not Hitbox.Enabled)
             end
 
             if Legit.Mode == "Toggle" and sameInput(input, Legit.Keybind) then
@@ -6492,6 +6690,18 @@ local function initAimbotModule(desyncTabs, musicTabs)
                 math.floor(ESPSettings.Color.G * 255 + 0.5),
                 math.floor(ESPSettings.Color.B * 255 + 0.5)
             )
+            if uiRefs.hitboxToggle then
+                uiRefs.hitboxToggle.Refresh()
+            end
+
+            if uiRefs.hitboxPartDD then
+                uiRefs.hitboxPartDD.Refresh()
+            end
+
+            if uiRefs.hitboxSizeRow then
+                uiRefs.hitboxSizeRow.Refresh()
+            end
+
             if fovCircle then
                 fovCircle.Color = ESPSettings.Color
             end
@@ -6528,10 +6738,9 @@ local function initAimbotModule(desyncTabs, musicTabs)
             BackgroundTransparency = 1,
             BorderSizePixel = 0,
             ScrollBarThickness = 4,
-            CanvasSize = UDim2.new(0, 0, 0, 300),
+            CanvasSize = UDim2.new(0, 0, 0, 340),
         })
-
-        local inner = mkPanel(scroll, UDim2.new(1, 0, 0, 300))
+        local inner = mkPanel(scroll, UDim2.new(1, 0, 0, 340))
         local y = 10
 
         mkLabel(inner, "LegitBot / Ragebot keybinds", UDim2.new(1, -24, 0, 20), UDim2.new(0, 12, 0, y), F_S, 14)
@@ -6570,10 +6779,60 @@ local function initAimbotModule(desyncTabs, musicTabs)
         end, function(v)
             Rage.Keybind = v
         end)
+
+        y = y + 34
+
+        mkBindRow(inner, "Toggle Hitbox", y, function()
+            return Keybinds.ToggleHitbox
+        end, function(v)
+            Keybinds.ToggleHitbox = v
+        end)
+    end
+
+    local function buildHitboxTab(parent)
+    local scroll = create("ScrollingFrame", {
+        Parent = parent,
+        Size = UDim2.new(1, 0, 1, 0),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        ScrollBarThickness = 4,
+        CanvasSize = UDim2.new(0, 0, 0, 320),
+    })
+
+    local inner = mkPanel(scroll, UDim2.new(1, 0, 0, 320))
+    local y = 10
+
+    mkLabel(inner, "Hitbox?", UDim2.new(1, -24, 0, 36), UDim2.new(0, 12, 0, y), F_S, 12)
+    y = y + 42
+
+    uiRefs.hitboxToggle = mkToggleRow(inner, "Hitbox", y, function()
+    return Hitbox.Enabled
+    end, function(v)
+    setHitboxEnabled(v)
+    end, true)
+    y = y + 34
+
+    uiRefs.hitboxPartDD = mkDropdownRow(inner, "Hitbox Part", {"Head", "RootPart"}, y, function()
+    return Hitbox.Part
+    end, function(v)
+    Hitbox.Part = v
+    refreshHitboxes()
+    saveAimAuto()
+    end)
+    y = y + 34
+
+    uiRefs.hitboxSizeRow = mkNumRow(inner, "Hitbox Size (1-20)", y, function()
+    return Hitbox.Size
+    end, function(v)
+    Hitbox.Size = math.clamp(v, 1, 20)
+    refreshHitboxes()
+    saveAimAuto()
+    end, 1, 20, 0)
     end
 
     addAimTab("LegitBot", buildLegitTab)
     addAimTab("Ragebot", buildRageTab)
+    addAimTab("Hitbox", buildHitboxTab)
     addAimTab("ESP", buildESPTab)
     addAimTab("Keybinds", buildKeybindsTab)
 
@@ -6861,6 +7120,22 @@ local function initAimbotModule(desyncTabs, musicTabs)
             applyRageData(data.Rage)
         end
 
+        if type(data.Hitbox) == "table" then
+            local h = data.Hitbox
+
+            if h.Enabled ~= nil then
+                Hitbox.Enabled = h.Enabled and true or false
+            end
+
+            if h.Part == "Head" or h.Part == "RootPart" then
+                Hitbox.Part = h.Part
+            end
+
+            if type(h.Size) == "number" then
+                Hitbox.Size = math.clamp(h.Size, 1, 20)
+            end
+        end
+
         if data.ESP then
             applyESPData(data.ESP)
         end
@@ -6873,6 +7148,10 @@ local function initAimbotModule(desyncTabs, musicTabs)
             if data.Keybinds.ToggleRagebot ~= nil then
                 Keybinds.ToggleRagebot = getEnumByName(data.Keybinds.ToggleRagebot)
             end
+
+            if data.Keybinds.ToggleHitbox ~= nil then
+                Keybinds.ToggleHitbox = getEnumByName(data.Keybinds.ToggleHitbox)
+            end
         end
 
         -- Взаимная эксклюзивность
@@ -6881,6 +7160,7 @@ local function initAimbotModule(desyncTabs, musicTabs)
         end
 
         setESPEnabled(ESPSettings.Enabled)
+        refreshHitboxes()
 
         if refreshAimUI then
             refreshAimUI()
@@ -6923,6 +7203,11 @@ local function initAimbotModule(desyncTabs, musicTabs)
         Rage.MaxDistance = 0
         Rage.ActiveToggle = false
         Rage.Keybind = Enum.UserInputType.MouseButton2
+
+        Hitbox.Enabled = false
+        Hitbox.Part = "Head"
+        Hitbox.Size = 5
+        refreshHitboxes()
 
         ESPSettings.Enabled = false
         ESPSettings.Color = Color3.fromRGB(0, 255, 150)
