@@ -125,6 +125,12 @@ local toggleRegistry = {} -- [кнопка] = function() return состояни
 local VisualsAPI = nil
 local AimAPI = nil
 local MovementAPI = nil
+local KeyListAPI = nil
+local MusicKeybinds = { Toggle = "" }
+local keyListProviders = {}
+local function registerKeyListProvider(group, fn)
+	keyListProviders[group] = fn
+end
 local function scaleColor(c, f)
 	return Color3.fromRGB(math.clamp(c.R*255*f,0,255), math.clamp(c.G*255*f,0,255), math.clamp(c.B*255*f,0,255))
 end
@@ -220,6 +226,11 @@ local function saveConfig()
     if MovementAPI and MovementAPI.Gather then
 	    config.Movement = MovementAPI.Gather()
     end
+
+    if KeyListAPI and KeyListAPI.Gather then
+	    config.KeyList = KeyListAPI.Gather()
+    end
+
 	local success, json = pcall(function() return HttpService:JSONEncode(config) end)
 	if success then
 		if makefolder then pcall(function() makefolder("EmilyUi") end) end
@@ -500,10 +511,13 @@ local Music = makeSideBtn("Music", 118)
 local Aim = makeSideBtn("Aim", 177)
 
 --// Меню вкладок
-local MenuInsided = create("Frame", {Name = "MenuInsided", Parent = FuckYou, Position = UDim2.new(0, 65, 0, 45), Size = UDim2.new(0, 105, 1, -45), BackgroundColor3 = uiColor_SideBar, BorderSizePixel = 0})
+local MenuInsided = create("ScrollingFrame", {Name = "MenuInsided", Parent = FuckYou, Position = UDim2.new(0, 65, 0, 45), Size = UDim2.new(0, 105, 1, -45), BackgroundColor3 = uiColor_SideBar, BorderSizePixel = 0, ScrollBarThickness = 3, ScrollBarImageColor3 = COL_BORDER, CanvasSize = UDim2.new(0, 0, 0, 0), ClipsDescendants = true})
 table.insert(themeElements.SideBars, MenuInsided)
-create("UIListLayout", {Parent = MenuInsided, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 4)})
+local menuLayout = create("UIListLayout", {Parent = MenuInsided, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 4)})
 create("UIPadding", {Parent = MenuInsided, PaddingTop = UDim.new(0, 5), PaddingLeft = UDim.new(0, 5), PaddingRight = UDim.new(0, 5)})
+menuLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+	MenuInsided.CanvasSize = UDim2.new(0, 0, 0, menuLayout.AbsoluteContentSize.Y + 10)
+end)
 
 --// Containment
 local Containment = create("Frame", {Name = "Containment", Parent = FuckYou, Position = UDim2.new(0, 170, 0, 45), Size = UDim2.new(1, -170, 1, -45), BackgroundTransparency = 1, BorderSizePixel = 0})
@@ -540,6 +554,7 @@ local tabFrames = {
 	Hubs = createTabContentFrame("TabScriptHubs"),
 	Guis = createTabContentFrame("TabGuis"),
 	Anims = createTabContentFrame("TabAnimations"),
+    KeyList = createTabContentFrame("TabKeyList"),
 	Settings = createTabContentFrame("TabSettings")
 }
 
@@ -2729,9 +2744,18 @@ local function initDesyncModule()
         end)
     end)
 
-    return desyncTabs
+    registerKeyListProvider("Desync", function()
+	    local rows = {}
+	    if not DesyncSectionEnabled then return rows end
+	    if IsDesynced then table.insert(rows, {"DESYNC", "ON"}) end
+	    if curDesyncPlaying and curDesyncName then table.insert(rows, {"DESYNC ANIM", curDesyncName}) end
+	    if curNormTrack and curNormName and curNormTrack.IsPlaying then table.insert(rows, {"ANIM MANAGER", curNormName}) end
+	    return rows
+    end)
+
+    return desyncTabs, keybinds
 end
-local desyncTabs = initDesyncModule()
+local desyncTabs, DesyncKeybinds = initDesyncModule()
 
 -- =========================================================
 -- ========== CHARACTER / PLAYERS / VISUALS / UTILS / SERVER
@@ -3785,6 +3809,18 @@ task.spawn(function()
 			sesWalkL.Text = "Walked: " .. math.floor(sessionWalked) .. " studs"
 		end)
 	end
+end)
+registerKeyListProvider("EmilyUi", function()
+	local rows = {}
+	if CharSettings.Speed ~= 16 then table.insert(rows, {"SPEED", tostring(CharSettings.Speed)}) end
+	if CharSettings.Jump ~= 50 then table.insert(rows, {"JUMP", tostring(CharSettings.Jump)}) end
+	if math.abs(CharSettings.Gravity - 196.2) > 0.05 then table.insert(rows, {"GRAVITY", string.format("%.1f", CharSettings.Gravity)}) end
+	if visToggles.Crosshair and visToggles.Crosshair:Get() then table.insert(rows, {"CROSSHAIR", "ON"}) end
+	if VisualSettings.FOV ~= 70 then table.insert(rows, {"FOV", tostring(VisualSettings.FOV)}) end
+	if visToggles.Fullbright and visToggles.Fullbright:Get() then table.insert(rows, {"FULLBRIGHT", "ON"}) end
+	if visToggles.Trails and visToggles.Trails:Get() then table.insert(rows, {"TRAILS", "ON"}) end
+	if visToggles.WorldColor and visToggles.WorldColor:Get() then table.insert(rows, {"WORLD COLOR", "ON"}) end
+	return rows
 end)
 end
 
@@ -4859,11 +4895,39 @@ local function initMusicModule(desyncTabs)
 	end
 	refreshMusicToggleText()
 	MusicSidebarToggle.MouseButton1Click:Connect(function() setMusicState(not ToggleState) end)
+    
+    UserInputService.InputBegan:Connect(function(inp, processed)
+	    if processed then return end
+	    if inp.UserInputType == Enum.UserInputType.Keyboard then
+		    local name = inp.KeyCode.Name
+		    if unlocked and MusicKeybinds.Toggle ~= "" and name == MusicKeybinds.Toggle then
+    			setMusicState(not ToggleState)
+		    end
+	    end
+    end)
 
     ScreenGui.Destroying:Connect(function()
         pcall(function()
             setMusicState(false)
         end)
+    end)
+
+    registerKeyListProvider("Music", function()
+	    local rows = {}
+	    if not ToggleState then return rows end
+	    local label = "ON"
+	    if musicSound and musicSound.Parent and musicSound.IsPlaying then
+    		local tr = DataStructure.Categories[currentCategory] and DataStructure.Categories[currentCategory][currentSelectedId]
+		    if tr and tr.name then
+    			label = tr.name
+		    elseif currentSelectedId ~= "" then
+    			label = currentSelectedId
+		    elseif soundIdBox and soundIdBox.Text ~= "" then
+    			label = soundIdBox.Text
+		    end
+	    end
+	    table.insert(rows, {"MUSIC", label})
+	    return rows
     end)
 
 	return musicTabs
@@ -4904,6 +4968,7 @@ local function initAimbotModule(desyncTabs, musicTabs)
         AimPart = "All", -- All / Head / RootPart
         StickToTarget = false,
         WallCheck = false,
+        TeamCheck = true,
         DrawFOV = true,
         FOV = 150,
         Smoothness = 0.20,
@@ -5000,6 +5065,7 @@ local function initAimbotModule(desyncTabs, musicTabs)
                 AimPart = Legit.AimPart,
                 StickToTarget = Legit.StickToTarget,
                 WallCheck = Legit.WallCheck,
+                TeamCheck = Legit.TeamCheck,
                 DrawFOV = Legit.DrawFOV,
                 FOV = Legit.FOV,
                 Smoothness = Legit.Smoothness,
@@ -5020,6 +5086,7 @@ local function initAimbotModule(desyncTabs, musicTabs)
                 Priority = Rage.Priority,
                 FOV = Rage.FOV,
                 WallCheck = Rage.WallCheck,
+                TeamCheck = Rage.TeamCheck,
                 AutoFire = Rage.AutoFire,
                 FireDelay = Rage.FireDelay,
                 FireAngle = Rage.FireAngle,
@@ -5299,6 +5366,13 @@ local function initAimbotModule(desyncTabs, musicTabs)
         return humanoid and root and humanoid.Health > 0
     end
 
+    local function isSameTeamAsLocal(player)
+	    if LocalPlayer.Team ~= nil and player.Team ~= nil then
+		    return LocalPlayer.Team == player.Team
+	    end
+	    return false
+    end
+
     local function getAimParts(character, mode)
         local parts = {}
         if not character then return parts end
@@ -5424,8 +5498,8 @@ local function initAimbotModule(desyncTabs, musicTabs)
         local bestDist = Legit.FOV
 
         for _, player in ipairs(Players:GetPlayers()) do
-            if player ~= LocalPlayer and isAlive(player) then
-                for _, part in ipairs(getAimParts(player.Character, Legit.AimPart)) do
+            if player ~= LocalPlayer and isAlive(player) and (not Legit.TeamCheck or not isSameTeamAsLocal(player)) then
+	            for _, part in ipairs(getAimParts(player.Character, Legit.AimPart)) do
                     local screenPos, onScreen = camera:WorldToViewportPoint(part.Position)
                     if onScreen then
                         local mag = (Vector2.new(screenPos.X, screenPos.Y) - mouse).Magnitude
@@ -5459,7 +5533,7 @@ local function initAimbotModule(desyncTabs, musicTabs)
         local bestDist = 20 -- небольшой радиус вокруг прицела
 
         for _, player in ipairs(Players:GetPlayers()) do
-            if player ~= LocalPlayer and isAlive(player) then
+            if player ~= LocalPlayer and isAlive(player) and (not Legit.TeamCheck or not isSameTeamAsLocal(player)) then
                 for _, part in ipairs(getAimParts(player.Character, Legit.TriggerPart)) do
                     local screenPos, onScreen = camera:WorldToViewportPoint(part.Position)
                     if onScreen then
@@ -5488,7 +5562,7 @@ local function initAimbotModule(desyncTabs, musicTabs)
         local best = nil
 
         for _, player in ipairs(Players:GetPlayers()) do
-            if player ~= LocalPlayer and isAlive(player) then
+            if player ~= LocalPlayer and isAlive(player) and (not Rage.TeamCheck or not isSameTeamAsLocal(player)) then
                 local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
 
                 for _, part in ipairs(getAimParts(player.Character, Rage.AimPart)) do
@@ -6163,6 +6237,13 @@ local function initAimbotModule(desyncTabs, musicTabs)
         end)
         y = y + 34
 
+        mkToggleRow(inner, "Team Check", y, function()
+	        return Legit.TeamCheck
+        end, function(v)
+	        Legit.TeamCheck = v
+        end)
+        y = y + 34
+
         mkToggleRow(inner, "Draw FOV", y, function()
             return Legit.DrawFOV
         end, function(v)
@@ -6264,6 +6345,13 @@ local function initAimbotModule(desyncTabs, musicTabs)
             return Rage.WallCheck
         end, function(v)
             Rage.WallCheck = v
+        end)
+        y = y + 34
+
+        mkToggleRow(inner, "Team Check", y, function()
+	        return Rage.TeamCheck
+        end, function(v)
+	        Rage.TeamCheck = v
         end)
         y = y + 34
 
@@ -6626,6 +6714,10 @@ local function initAimbotModule(desyncTabs, musicTabs)
             Legit.WallCheck = data.WallCheck and true or false
         end
 
+        if data.TeamCheck ~= nil then
+	        Legit.TeamCheck = data.TeamCheck and true or false
+        end
+
         if data.DrawFOV ~= nil then
             Legit.DrawFOV = data.DrawFOV and true or false
         end
@@ -6688,6 +6780,10 @@ local function initAimbotModule(desyncTabs, musicTabs)
 
         if data.WallCheck ~= nil then
             Rage.WallCheck = data.WallCheck and true or false
+        end
+
+        if data.TeamCheck ~= nil then
+	        Legit.TeamCheck = data.TeamCheck and true or false
         end
 
         if data.AutoFire ~= nil then
@@ -7106,6 +7202,14 @@ local function initAimbotModule(desyncTabs, musicTabs)
                 refreshSidebarTexts()
             end
         end)
+    end)
+    
+    registerKeyListProvider("Aim", function()
+	    local rows = {}
+	    if Legit.Enabled then table.insert(rows, {"LEGIT BOT", "ON"}) end
+	    if Rage.Enabled then table.insert(rows, {"RAGE BOT", "ON"}) end
+	    if ESPSettings.Enabled then table.insert(rows, {"ESP", "ON"}) end
+	    return rows
     end)
 
     return {
@@ -9621,6 +9725,17 @@ local function resetMovementConfig()
 	setMovementEnabled(false)
 end
 
+registerKeyListProvider("Movement", function()
+	local rows = {}
+	if not MovementEnabled then return rows end
+	if state == State.Recording then
+		table.insert(rows, {"RECORD", "RECORDING..."})
+	elseif (state == State.Playing or state == State.Aligning) and currentPlayback then
+		table.insert(rows, {"PLAY", currentPlayback.Name or "ON"})
+	end
+	return rows
+end)
+
 return {
 Tabs = movementTabs,
 Gather = gatherMovementConfig,
@@ -9631,9 +9746,239 @@ end
 MovementAPI = initMovementModule(desyncTabs, musicTabs, AimAPI and AimAPI.Tabs or {})
 
 -- =========================================================
--- ========= MOVEMENT RECORDER MODULE END ==================
+-- ========== KEY LIST MODULE ==============================
 -- =========================================================
-
+local function initKeyListModule()
+local KL_FILE = "EmilyUi/FuckYou/KeyListSettings.json"
+local KL = {
+Enabled = true,
+ShowEmily = true,
+ShowDesync = true,
+ShowMusic = true,
+ShowAim = true,
+ShowMovement = true,
+}
+local function ensureDirs()
+if makefolder then pcall(function()
+if not isfolder("EmilyUi") then makefolder("EmilyUi") end
+if not isfolder("EmilyUi/FuckYou") then makefolder("EmilyUi/FuckYou") end
+end) end
+end
+local refreshKL
+local function saveKL()
+if writefile then
+ensureDirs()
+pcall(function() writefile(KL_FILE, HttpService:JSONEncode(KL)) end)
+end
+if autoSaveConfig then autoSaveConfig() end
+end
+local function applyKL(d)
+if type(d) ~= "table" then return end
+local function bb(v, def) if v == nil then return def end return v and true or false end
+KL.Enabled = bb(d.Enabled, KL.Enabled)
+KL.ShowEmily = bb(d.ShowEmily, KL.ShowEmily)
+KL.ShowDesync = bb(d.ShowDesync, KL.ShowDesync)
+KL.ShowMusic = bb(d.ShowMusic, KL.ShowMusic)
+KL.ShowAim = bb(d.ShowAim, KL.ShowAim)
+KL.ShowMovement = bb(d.ShowMovement, KL.ShowMovement)
+end
+local function loadKL()
+if isfile and isfile(KL_FILE) and readfile then
+local ok, json = pcall(function() return readfile(KL_FILE) end)
+if ok and json then
+local ok2, d = pcall(function() return HttpService:JSONDecode(json) end)
+if ok2 and type(d) == "table" then applyKL(d) end
+end
+end
+end
+--// Оверлей: наследует тему EmilyUi (цвет окна, текста, прозрачность)
+local overlay = create("Frame", {
+Name = "FYKeyList", Parent = ScreenGui,
+AnchorPoint = Vector2.new(1, 1),
+Position = UDim2.new(1, -16, 1, -16),
+Size = UDim2.new(0, 250, 0, 60),
+BackgroundColor3 = uiColor_MainWindow,
+BorderColor3 = COL_BORDER, BorderSizePixel = 1,
+Visible = false, ZIndex = 5,
+})
+table.insert(themeElements.MainWindow, overlay)
+local topLine = create("Frame", {Parent = overlay, Size = UDim2.new(1, 0, 0, 2), BackgroundColor3 = Color3.fromRGB(255, 255, 255), BorderSizePixel = 0, ZIndex = 6})
+create("UIGradient", {Parent = topLine, Color = ColorSequence.new({
+ColorSequenceKeypoint.new(0.00, Color3.fromRGB(0, 170, 255)),
+ColorSequenceKeypoint.new(0.25, Color3.fromRGB(170, 80, 255)),
+ColorSequenceKeypoint.new(0.50, Color3.fromRGB(255, 90, 160)),
+ColorSequenceKeypoint.new(0.75, Color3.fromRGB(255, 190, 60)),
+ColorSequenceKeypoint.new(1.00, Color3.fromRGB(150, 255, 80)),
+})})
+local titleBar = create("TextLabel", {Parent = overlay, Size = UDim2.new(1, 0, 0, 24), Position = UDim2.new(0, 0, 0, 2), BackgroundTransparency = 1, Text = "KEYBINDS", TextColor3 = uiColor_TextColor, TextSize = 13, Font = FONT, ZIndex = 6})
+table.insert(themeElements.Texts, titleBar)
+local rowsFrame = create("Frame", {Parent = overlay, Size = UDim2.new(1, 0, 1, -26), Position = UDim2.new(0, 0, 0, 26), BackgroundTransparency = 1, ZIndex = 6})
+local rowsLayout = create("UIListLayout", {Parent = rowsFrame, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 4)})
+create("UIPadding", {Parent = rowsFrame, PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10), PaddingBottom = UDim.new(0, 8)})
+--// Только АКТИВНЫЕ состояния модулей
+local GROUP_MAP = {
+{"ShowEmily", "EmilyUi", "EMILYUI"},
+{"ShowDesync", "Desync", "DESYNC"},
+{"ShowMusic", "Music", "MUSIC"},
+{"ShowAim", "Aim", "AIM"},
+{"ShowMovement", "Movement", "MOVEMENT"},
+}
+local function collectRows()
+local out = {}
+for _, g in ipairs(GROUP_MAP) do
+if KL[g[1]] then
+local fn = keyListProviders[g[2]]
+if fn then
+local ok, rows = pcall(fn)
+rows = (ok and type(rows) == "table") and rows or {}
+if #rows > 0 then
+table.insert(out, {"h", g[3]})
+for _, r in ipairs(rows) do
+table.insert(out, {"r", tostring(r[1]), tostring(r[2])})
+end
+end
+end
+end
+end
+return out
+end
+local function rebuild()
+for _, ch in ipairs(rowsFrame:GetChildren()) do
+if ch:IsA("Frame") or ch:IsA("TextLabel") then ch:Destroy() end
+end
+for i, it in ipairs(collectRows()) do
+if it[1] == "h" then
+local h = create("TextLabel", {
+Parent = rowsFrame, LayoutOrder = i,
+Size = UDim2.new(1, 0, 0, 14), BackgroundTransparency = 1,
+Text = it[2], TextColor3 = uiColor_TextColor, TextSize = 11, Font = FONT,
+TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 6,
+})
+table.insert(themeElements.Texts, h)
+else
+local r = create("Frame", {Parent = rowsFrame, LayoutOrder = i, Size = UDim2.new(1, 0, 0, 16), BackgroundTransparency = 1, ZIndex = 6})
+local l = create("TextLabel", {Parent = r, Size = UDim2.new(0.62, 0, 1, 0), BackgroundTransparency = 1, Text = it[2], TextColor3 = uiColor_TextColor, TextSize = 12, Font = FONT, TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 6})
+table.insert(themeElements.Texts, l)
+create("TextLabel", {Parent = r, Size = UDim2.new(0.38, 0, 1, 0), Position = UDim2.new(0.62, 0, 0, 0), BackgroundTransparency = 1, Text = it[3], TextColor3 = uiColor_ToggleOnText, TextSize = 12, Font = FONT, TextXAlignment = Enum.TextXAlignment.Right, TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 6})
+end
+end
+local function fitSize()
+if overlay.Parent then
+overlay.Size = UDim2.new(0, 250, 0, 26 + rowsLayout.AbsoluteContentSize.Y + 8)
+end
+end
+fitSize()
+task.defer(fitSize)
+end
+local lastSnap = ""
+refreshKL = function(force)
+if not overlay or not overlay.Parent then return end
+local vis = (KL.Enabled and unlocked) and true or false
+overlay.Visible = vis
+if not vis then return end
+local t = {}
+for _, it in ipairs(collectRows()) do table.insert(t, table.concat(it, "|")) end
+local snap = table.concat(t, "#")
+if force or snap ~= lastSnap then
+lastSnap = snap
+rebuild()
+end
+end
+--// Пересборка списка при смене темы
+local baseApplyThemeKL = applyTheme
+applyTheme = function()
+baseApplyThemeKL()
+lastSnap = ""
+refreshKL(true)
+end
+loadKL()
+--// Локальный drag оверлея
+do
+local dragging, dragInput, dragStart, startPosition
+titleBar.InputBegan:Connect(function(input)
+if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+dragging = true
+dragStart = input.Position
+startPosition = overlay.Position
+input.Changed:Connect(function()
+if input.UserInputState == Enum.UserInputState.End then dragging = false end
+end)
+end
+end)
+titleBar.InputChanged:Connect(function(input)
+if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then dragInput = input end
+end)
+UserInputService.InputChanged:Connect(function(input)
+if input == dragInput and dragging then
+local delta = input.Position - dragStart
+overlay.Position = UDim2.new(startPosition.X.Scale, startPosition.X.Offset + delta.X, startPosition.Y.Scale, startPosition.Y.Offset + delta.Y)
+end
+end)
+end
+--// Вкладка Key List: только тумблеры отображения
+local tab = tabFrames.KeyList
+createSection(tab, "Key List Overlay")
+local function klToggle(labelText, get, set)
+local btn = create("TextButton", {
+Parent = tab, Size = UDim2.new(1, 0, 0, 30),
+BackgroundColor3 = uiColor_ButtonColor, BorderColor3 = COL_BORDER,
+BackgroundTransparency = 1 - uiGuiOpacity,
+TextColor3 = uiColor_TextColor, Text = "", Font = FONT, TextSize = 13,
+})
+table.insert(themeElements.CustomButtons, btn)
+table.insert(themeElements.Texts, btn)
+local function paint()
+btn.Text = labelText .. ": " .. (get() and "ON" or "OFF")
+paintToggleBtn(btn, get())
+end
+registerToggle(btn, get)
+btn.MouseButton1Click:Connect(function()
+set(not get())
+paint()
+saveKL()
+refreshKL(true)
+end)
+paint()
+return btn
+end
+klToggle("Show Key List", function() return KL.Enabled end, function(v) KL.Enabled = v end)
+klToggle("Show: EmilyUi", function() return KL.ShowEmily end, function(v) KL.ShowEmily = v end)
+klToggle("Show: Desync", function() return KL.ShowDesync end, function(v) KL.ShowDesync = v end)
+klToggle("Show: Music", function() return KL.ShowMusic end, function(v) KL.ShowMusic = v end)
+klToggle("Show: Aim", function() return KL.ShowAim end, function(v) KL.ShowAim = v end)
+klToggle("Show: Movement", function() return KL.ShowMovement end, function(v) KL.ShowMovement = v end)
+createContentButton(tab, "Refresh Key List", function() refreshKL(true) end)
+--// Автообновление (ловит смену состояний в модулях)
+task.spawn(function()
+while true do
+task.wait(0.5)
+pcall(refreshKL)
+end
+end)
+refreshKL(true)
+return {
+Gather = function()
+local out = {}
+for k, v in pairs(KL) do out[k] = v end
+return out
+end,
+Apply = function(d)
+applyKL(d)
+saveKL()
+refreshKL(true)
+end,
+Reset = function()
+KL.Enabled = true
+KL.ShowEmily = true
+KL.ShowDesync = true
+KL.ShowMusic = true
+KL.ShowAim = true
+KL.ShowMovement = true
+saveKL()
+refreshKL(true)
+end,
+}
+end
 
 --// Settings
 createSection(tabFrames.Settings, "UI Customization")
@@ -9848,6 +10193,10 @@ local function gatherConfig()
 	    cfg.Movement = MovementAPI.Gather()
     end
 
+    if KeyListAPI and KeyListAPI.Gather then
+	    cfg.KeyList = KeyListAPI.Gather()
+    end
+
     return cfg
     end
 
@@ -10048,6 +10397,8 @@ createContentButton(tabFrames.Settings, "Reset defaults", function()
     if MovementAPI and MovementAPI.Reset then
 	    MovementAPI.Reset()
     end
+
+    if KeyListAPI and KeyListAPI.Reset then KeyListAPI.Reset() end
 end)
 
 refreshConfigList()
@@ -10073,6 +10424,7 @@ tabs = {
 	{Frame = tabFrames.Hubs, Name = "Script Hubs"},
 	{Frame = tabFrames.Guis, Name = "GUIs"},
 	{Frame = tabFrames.Anims, Name = "Animations"},
+    {Frame = tabFrames.KeyList, Name = "Key List"},
 	{Frame = tabFrames.Settings, Name = "Settings"}
 }
 
@@ -10425,3 +10777,4 @@ task.spawn(function()
 end)
 
 task.spawn(checkKeySystem)
+KeyListAPI = initKeyListModule()
