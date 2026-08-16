@@ -263,7 +263,37 @@ local function loadConfig()
 	end
 end
 
+local lastAutoConfigSave = 0
+
+local configSaveListeners = {}
+
+local function registerConfigSaveListener(fn)
+    if typeof(fn) == "function" then
+        table.insert(configSaveListeners, fn)
+    end
+end
+
+local function runConfigSaveListeners()
+    for _, fn in ipairs(configSaveListeners) do
+        pcall(fn)
+    end
+end
+
+local function autoSaveConfig(force)
+    if not unlocked then return end
+
+    if not force and os.clock() - lastAutoConfigSave < 0.5 then
+        return
+    end
+
+    lastAutoConfigSave = os.clock()
+
+    pcall(saveConfig)
+    runConfigSaveListeners()
+end
+
 loadConfig()
+
 
 --// ===== ГЛАВНОЕ ОКНО =====
 local FuckYou = create("Frame", {
@@ -651,7 +681,7 @@ local GamePlaces = {
 		{ type = "label", text = "Murder vs Sherif 2" },
 		{ type = "button", text = "Polo MVS", cb = function() loadstring(game:HttpGet("https://raw.githubusercontent.com/polo242c/mvs/main/mvs"))() end },
 		{ type = "button", text = "CyberCoders", cb = function() loadstring(game:HttpGet("https://rawscripts.net/raw/Murderers-VS-Sheriffs-DUELS-CyberCoders-Menu-II-193913"))() end },
-		{ type = "button", text = "Wic1k", cb = function() loadstring(game:HttpGet("https://raw.githubusercontent.com/Wic1k/Scripts/refs/heads/main/mvsd.txt"))() end },
+		{ type = "button", text = "Wic1k", cb = function() loadstring(game:HttpGet("https:// raw.githubusercontent.com/Wic1k/Scripts/refs/heads/main/mvsd.txt"))() end },
 	},
 	["7041939546"] = {
 		{ type = "label", text = "Catalog Avatar Creator" },
@@ -1169,11 +1199,16 @@ local function initDesyncModule()
         end
         local clean = string.match(tostring(id), "%d+") or id
         if desyncChar and desyncChar:FindFirstChildOfClass("Humanoid") then
-            local anim = Instance.new("Animation")
-            anim.AnimationId = "rbxassetid://" .. clean
+            local a = Instance.new("Animation")
+            a.AnimationId = "rbxassetid://" .. clean
             local hum = desyncChar:FindFirstChildOfClass("Humanoid")
             local an = hum:FindFirstChildOfClass("Animator") or Instance.new("Animator", hum)
-            local ok, tr = pcall(function() return an:LoadAnimation(anim) end)
+            local ok, tr =
+                pcall(
+                function()
+                    return an:LoadAnimation(a)
+                end
+            )
             if ok and tr then
                 curNormTrack = tr
                 curNormName = name
@@ -1763,11 +1798,16 @@ local function initDesyncModule()
                             end
                             if desyncChar and desyncChar:FindFirstChildOfClass("Humanoid") then
                                 local clean = string.match(tostring(id), "%d+") or id
-                                local anim = Instance.new("Animation")
-                                anim.AnimationId = "rbxassetid://" .. clean
+                                local a = Instance.new("Animation")
+                                a.AnimationId = "rbxassetid://" .. clean
                                 local hum = desyncChar:FindFirstChildOfClass("Humanoid")
                                 local an = hum:FindFirstChildOfClass("Animator") or Instance.new("Animator", hum)
-                                local ok, tr = pcall(function() return an:LoadAnimation(anim) end)
+                                local ok, tr =
+                                    pcall(
+                                    function()
+                                        return an:LoadAnimation(a)
+                                    end
+                                )
                                 if ok and tr then
                                     activeTrack = tr
                                     tr.Looped = looped
@@ -2675,6 +2715,19 @@ local function initDesyncModule()
 		end
 		refreshDesyncToggleText()
 	end)
+
+    ScreenGui.Destroying:Connect(function()
+        pcall(function()
+            DesyncSectionEnabled = false
+
+            if IsDesynced then
+                stopDesync()
+            end
+
+            stopDesyncAnim()
+            stopNormAnim()
+        end)
+    end)
 
     return desyncTabs
 end
@@ -3607,6 +3660,14 @@ VisualsAPI = {
 		end
 	end
 }
+
+ScreenGui.Destroying:Connect(function()
+    pcall(function()
+        if VisualsAPI and VisualsAPI.Reset then
+            VisualsAPI.Reset()
+        end
+    end)
+end)
 
 ------------------------------------------------------------
 -- 4) UTILITIES
@@ -4799,6 +4860,12 @@ local function initMusicModule(desyncTabs)
 	refreshMusicToggleText()
 	MusicSidebarToggle.MouseButton1Click:Connect(function() setMusicState(not ToggleState) end)
 
+    ScreenGui.Destroying:Connect(function()
+        pcall(function()
+            setMusicState(false)
+        end)
+    end)
+
 	return musicTabs
 end
 
@@ -4809,115 +4876,193 @@ local musicTabs = initMusicModule(desyncTabs)
 -- ========== AIMBOT MODULE ================================
 -- =========================================================
 local function initAimbotModule(desyncTabs, musicTabs)
-	desyncTabs = desyncTabs or {}
-	musicTabs = musicTabs or {}   -- ← страховка от nil
-	local Camera = workspace.CurrentCamera
+    desyncTabs = desyncTabs or {}
+    musicTabs = musicTabs or {}
+
     local F_R = FONT
     local F_B = FONT
     local F_S = FONT
 
-    --// Настройки аимбота (по умолчанию ВЫКЛЮЧЕНО)
-    local AimSettings = {
+    --// Файл автосохранения Aim-настроек
+    local AIM_AUTO_FILE = "EmilyUi/FuckYou/AimSettings.json"
+
+    local function ensureAimDirs()
+        if makefolder then
+            pcall(function()
+                if not isfolder("EmilyUi") then makefolder("EmilyUi") end
+                if not isfolder("EmilyUi/FuckYou") then makefolder("EmilyUi/FuckYou") end
+            end)
+        end
+    end
+
+    --// LegitBot
+    local Legit = {
         Enabled = false,
-        Mode = "Hold",
-        AimPart = "All",
+
+        -- Aim
+        Mode = "Hold", -- Hold / Toggle / Always
+        AimPart = "All", -- All / Head / RootPart
         StickToTarget = false,
         WallCheck = false,
-        AutoFire = false,
         DrawFOV = true,
         FOV = 150,
-        Smoothness = 0.2,
+        Smoothness = 0.20,
         Sensitivity = 0.45,
         ActiveToggle = false,
-        Keybind = Enum.UserInputType.MouseButton2
+
+        -- Triggerbot
+        TriggerMode = "Hold", -- Hold / Toggle / Always
+        TriggerTime = 0.08, -- 0.0 - 1.0
+        TriggerPart = "All", -- All / Head / RootPart
+        TriggerActiveToggle = false,
+
+        -- Keys
+        Keybind = Enum.UserInputType.MouseButton2,
+        TriggerKey = Enum.KeyCode.LeftAlt,
     }
 
+    --// Ragebot
+    local Rage = {
+        Enabled = false,
+        Mode = "Always", -- Always / Hold / Toggle
+        AimPart = "Head", -- All / Head / RootPart
+        Priority = "Closest", -- Closest / Angle / Health
+
+        FOV = 360, -- 0 - 360
+        WallCheck = true,
+
+        AutoFire = true,
+        FireDelay = 0.05,
+        FireAngle = 5,
+
+        Smoothness = 0.10,
+        Prediction = 0.0,
+        MaxDistance = 0, -- 0 = unlimited
+
+        ActiveToggle = false,
+        Keybind = Enum.UserInputType.MouseButton2,
+    }
+
+    --// ESP
     local ESPSettings = {
         Enabled = false,
         Color = Color3.fromRGB(0, 255, 150),
         ShowName = true,
         ShowUsername = true,
         ShowHP = true,
-        ShowDistance = true
+        ShowDistance = true,
     }
 
-    local AimKeybinds = {
-        ToggleAimbot = Enum.KeyCode.G,
-        ToggleESP = Enum.KeyCode.H,
-        ToggleMenu = Enum.KeyCode.RightShift
+    --// Global aim keybinds
+    local Keybinds = {
+        ToggleLegitBot = Enum.KeyCode.G,
+        ToggleRagebot = Enum.KeyCode.H,
     }
 
-	--// Refs на UI-элементы (для apply/reset)
-	local uiRefs = {}
-    local refreshESPToggleText
-	--// Автосохранение настроек аимбота
-	local AIM_AUTO_FILE = "EmilyUi/FuckYou/AimSettings.json"
-	local function ensureAimDirs()
-    	if makefolder then pcall(function()
-        	if not isfolder("EmilyUi") then makefolder("EmilyUi") end
-        	if not isfolder("EmilyUi/FuckYou") then makefolder("EmilyUi/FuckYou") end
-	    end) end
-	end
-	local function enumKeyName(v)
-	    return tostring(v):gsub("Enum.KeyCode.", ""):gsub("Enum.UserInputType.", "")
-	end
-	--// Безопасный поиск Enum по имени (Enum.KeyCode["MouseButton2"] кидает ошибку, поэтому делаем таблицы)
-	local KEYCODE_BY_NAME = {}
-	for _, e in ipairs(Enum.KeyCode:GetEnumItems()) do
-		KEYCODE_BY_NAME[e.Name] = e
-	end
-	local INPUTTYPE_BY_NAME = {}
-	for _, e in ipairs(Enum.UserInputType:GetEnumItems()) do
-		INPUTTYPE_BY_NAME[e.Name] = e
-	end
+    --// Safe enum lookup
+    local KEYCODE_BY_NAME = {}
+    for _, e in ipairs(Enum.KeyCode:GetEnumItems()) do
+        KEYCODE_BY_NAME[e.Name] = e
+    end
 
-	local function getEnumByName(name)
-		if not name or name == "" then return nil end
-		return KEYCODE_BY_NAME[name] or INPUTTYPE_BY_NAME[name]
-	end
-	--// Сбор данных аимбота для конфига
-	local function gatherAimConfig()
-    	return {
-        	Aimbot = {
-            	Enabled = AimSettings.Enabled,
-            	Mode = AimSettings.Mode,
-            	AimPart = AimSettings.AimPart,
-            	StickToTarget = AimSettings.StickToTarget,
-            	WallCheck = AimSettings.WallCheck,
-            	AutoFire = AimSettings.AutoFire,
-            	DrawFOV = AimSettings.DrawFOV,
-            	FOV = AimSettings.FOV,
-            	Smoothness = AimSettings.Smoothness,
-            	Sensitivity = AimSettings.Sensitivity,
-	            Keybind = enumKeyName(AimSettings.Keybind),
-        	},
-        	ESP = {
-            	Enabled = ESPSettings.Enabled,
-            	Color = {
-                	math.floor(ESPSettings.Color.R * 255 + 0.5),
-                	math.floor(ESPSettings.Color.G * 255 + 0.5),
-	                math.floor(ESPSettings.Color.B * 255 + 0.5),
-            	},
-            	ShowName = ESPSettings.ShowName,
-            	ShowUsername = ESPSettings.ShowUsername,
-            	ShowHP = ESPSettings.ShowHP,
-	            ShowDistance = ESPSettings.ShowDistance,
-        	},
-        	Keybinds = {
-            	ToggleAimbot = enumKeyName(AimKeybinds.ToggleAimbot),
-            	ToggleESP = enumKeyName(AimKeybinds.ToggleESP),
-	            ToggleMenu = enumKeyName(AimKeybinds.ToggleMenu),
-        	},
-	    }
-	end
-	local function saveAimAuto()
-    	if writefile then
-        	ensureAimDirs()
-        	pcall(function() writefile(AIM_AUTO_FILE, HttpService:JSONEncode(gatherAimConfig())) end)
-	    end
-	end
+    local INPUTTYPE_BY_NAME = {}
+    for _, e in ipairs(Enum.UserInputType:GetEnumItems()) do
+        INPUTTYPE_BY_NAME[e.Name] = e
+    end
 
-    --// FOV Circle
+    local function getEnumByName(name)
+        if not name or name == "" then return nil end
+        return KEYCODE_BY_NAME[name] or INPUTTYPE_BY_NAME[name]
+    end
+
+    local function enumKeyName(v)
+        if typeof(v) == "EnumItem" then
+            return v.Name
+        end
+        return ""
+    end
+
+    local function displayKeyName(v)
+        if typeof(v) == "EnumItem" then
+            return v.Name
+        end
+        return "None"
+    end
+
+    --// Gather config
+    local function gatherAimConfig()
+        return {
+            Version = 2,
+
+            Legit = {
+                Enabled = Legit.Enabled,
+                Mode = Legit.Mode,
+                AimPart = Legit.AimPart,
+                StickToTarget = Legit.StickToTarget,
+                WallCheck = Legit.WallCheck,
+                DrawFOV = Legit.DrawFOV,
+                FOV = Legit.FOV,
+                Smoothness = Legit.Smoothness,
+                Sensitivity = Legit.Sensitivity,
+
+                TriggerMode = Legit.TriggerMode,
+                TriggerTime = Legit.TriggerTime,
+                TriggerPart = Legit.TriggerPart,
+
+                Keybind = enumKeyName(Legit.Keybind),
+                TriggerKey = enumKeyName(Legit.TriggerKey),
+            },
+
+            Rage = {
+                Enabled = Rage.Enabled,
+                Mode = Rage.Mode,
+                AimPart = Rage.AimPart,
+                Priority = Rage.Priority,
+                FOV = Rage.FOV,
+                WallCheck = Rage.WallCheck,
+                AutoFire = Rage.AutoFire,
+                FireDelay = Rage.FireDelay,
+                FireAngle = Rage.FireAngle,
+                Smoothness = Rage.Smoothness,
+                Prediction = Rage.Prediction,
+                MaxDistance = Rage.MaxDistance,
+                Keybind = enumKeyName(Rage.Keybind),
+            },
+
+            ESP = {
+                Enabled = ESPSettings.Enabled,
+                Color = {
+                    math.floor(ESPSettings.Color.R * 255 + 0.5),
+                    math.floor(ESPSettings.Color.G * 255 + 0.5),
+                    math.floor(ESPSettings.Color.B * 255 + 0.5),
+                },
+                ShowName = ESPSettings.ShowName,
+                ShowUsername = ESPSettings.ShowUsername,
+                ShowHP = ESPSettings.ShowHP,
+                ShowDistance = ESPSettings.ShowDistance,
+            },
+
+            Keybinds = {
+                ToggleLegitBot = enumKeyName(Keybinds.ToggleLegitBot),
+                ToggleRagebot = enumKeyName(Keybinds.ToggleRagebot),
+            },
+        }
+    end
+
+    local function saveAimAuto()
+        if writefile then
+            ensureAimDirs()
+            pcall(function()
+                writefile(AIM_AUTO_FILE, HttpService:JSONEncode(gatherAimConfig()))
+            end)
+        end
+
+        if autoSaveConfig then
+            autoSaveConfig()
+        end
+    end
+
+    --// FOV circle
     local fovCircle = nil
     if Drawing then
         fovCircle = Drawing.new("Circle")
@@ -4927,20 +5072,71 @@ local function initAimbotModule(desyncTabs, musicTabs)
         fovCircle.Filled = false
     end
 
-    --// ESP Storage
+    --// ESP storage
     local ESP_Instances = {}
+
+    --// Aim/trigger state
     local currentTargetPart = nil
-    local lastFire = 0
-    local renderConnection = nil
+
+    local triggerTargetPart = nil
+    local triggerFirstSeen = 0
+    local lastTriggerShot = 0
+
+    local rageTargetPart = nil
+    local rageFirstSeen = 0
+    local lastRageFire = 0
+
     local aimInputConnection = nil
-    local setESPEnabled -- форвард-объявление (используется в keybind listener)
+    local mainLoopConnection = nil
+
+    local setESPEnabled
+    local refreshAimUI
+    local refreshSidebarTexts
+
+    local uiRefreshers = {}
+    local function addRefresh(fn)
+        table.insert(uiRefreshers, fn)
+    end
+
+    ------------------------------------------------------------
+    -- ESP FUNCTIONS
+    ------------------------------------------------------------
+
+    local function removeESPForPlayer(player)
+        local data = ESP_Instances[player]
+        if not data then return end
+
+        pcall(function()
+            if data.Highlight then data.Highlight:Destroy() end
+        end)
+
+        pcall(function()
+            if data.BillboardTop then data.BillboardTop:Destroy() end
+        end)
+
+        pcall(function()
+            if data.BillboardBottom then data.BillboardBottom:Destroy() end
+        end)
+
+        ESP_Instances[player] = nil
+    end
+
+    local function cleanESP()
+        for player in pairs(ESP_Instances) do
+            removeESPForPlayer(player)
+        end
+    end
 
     local function createESP(player)
-        if not player.Character then return end
+        if not player or not player.Character then return end
+
         local character = player.Character
         local root = character:FindFirstChild("HumanoidRootPart")
-        local humanoid = character:FindFirstChild("Humanoid")
+        local humanoid = character:FindFirstChildOfClass("Humanoid")
+
         if not root or not humanoid then return end
+
+        removeESPForPlayer(player)
 
         local highlight = Instance.new("Highlight")
         highlight.Name = "AimbotESP_Highlight"
@@ -4990,57 +5186,50 @@ local function initAimbotModule(desyncTabs, musicTabs)
             TextTop = textTop,
             TextBottom = textBottom,
             BillboardTop = billboardTop,
-            BillboardBottom = billboardBottom
+            BillboardBottom = billboardBottom,
         }
-    end
-
-    local function cleanESP()
-        for player, instances in pairs(ESP_Instances) do
-            if instances.Highlight then instances.Highlight:Destroy() end
-            if instances.BillboardTop then instances.BillboardTop:Destroy() end
-            if instances.BillboardBottom then instances.BillboardBottom:Destroy() end
-            ESP_Instances[player] = nil
-        end
-        ESP_Instances = {}
     end
 
     local function updateESP()
         for player, instances in pairs(ESP_Instances) do
-            if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-                local root = player.Character.HumanoidRootPart
-                local humanoid = player.Character:FindFirstChild("Humanoid")
+            local character = player.Character
+            local root = character and character:FindFirstChild("HumanoidRootPart")
+            local humanoid = character and character:FindFirstChildOfClass("Humanoid")
 
+            if root and humanoid then
                 instances.Highlight.FillColor = ESPSettings.Color
                 instances.TextTop.TextColor3 = ESPSettings.Color
                 instances.TextBottom.TextColor3 = ESPSettings.Color
 
                 local topInfo = {}
-                if ESPSettings.ShowName then table.insert(topInfo, player.DisplayName) end
-                if ESPSettings.ShowUsername then table.insert(topInfo, "@" .. player.Name) end
+                if ESPSettings.ShowName then
+                    table.insert(topInfo, player.DisplayName)
+                end
+                if ESPSettings.ShowUsername then
+                    table.insert(topInfo, "@" .. player.Name)
+                end
                 instances.TextTop.Text = table.concat(topInfo, " | ")
 
                 local bottomInfo = {}
-                if ESPSettings.ShowHP and humanoid then
-                    local hpText = string.format("HP: %d/%d", math.max(0, humanoid.Health), humanoid.MaxHealth)
-                    table.insert(bottomInfo, hpText)
+                if ESPSettings.ShowHP then
+                    table.insert(
+                        bottomInfo,
+                        string.format("HP: %d/%d", math.max(0, math.floor(humanoid.Health)), math.floor(humanoid.MaxHealth))
+                    )
                 end
+
                 if ESPSettings.ShowDistance and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
                     local dist = math.floor((LocalPlayer.Character.HumanoidRootPart.Position - root.Position).Magnitude)
                     table.insert(bottomInfo, dist .. "m")
                 end
+
                 instances.TextBottom.Text = table.concat(bottomInfo, " | ")
 
                 local enabled = ESPSettings.Enabled
-                instances.BillboardTop.Enabled = enabled
-                instances.BillboardBottom.Enabled = enabled
-                instances.Highlight.Enabled = enabled
 
-                if not ESPSettings.ShowName and not ESPSettings.ShowUsername then
-                    instances.BillboardTop.Enabled = false
-                end
-                if not ESPSettings.ShowHP and not ESPSettings.ShowDistance then
-                    instances.BillboardBottom.Enabled = false
-                end
+                instances.Highlight.Enabled = enabled
+                instances.BillboardTop.Enabled = enabled and (#topInfo > 0)
+                instances.BillboardBottom.Enabled = enabled and (#bottomInfo > 0)
             else
                 if instances.BillboardTop then instances.BillboardTop.Enabled = false end
                 if instances.BillboardBottom then instances.BillboardBottom.Enabled = false end
@@ -5049,91 +5238,293 @@ local function initAimbotModule(desyncTabs, musicTabs)
         end
     end
 
-    --// Отдельный цикл ESP (работает даже когда аимбот выключен)
-    local espLoopConnection = nil
-    local function startESPLoop()
-        if espLoopConnection then espLoopConnection:Disconnect() end
-        espLoopConnection = RunService.RenderStepped:Connect(function()
-            if not ESPSettings.Enabled then return end
-            if tick() % 0.1 < 0.02 then
-                for _, p in ipairs(Players:GetPlayers()) do
-                    if p ~= LocalPlayer and not ESP_Instances[p] and p.Character then
-                        createESP(p)
-                    end
-                end
+    local function hookESPCharacter(player)
+        player.CharacterAdded:Connect(function()
+            if ESPSettings.Enabled then
+                task.wait(0.5)
+                removeESPForPlayer(player)
+                createESP(player)
                 updateESP()
             end
         end)
     end
-    local function stopESPLoop()
-        if espLoopConnection then
-            espLoopConnection:Disconnect()
-            espLoopConnection = nil
-        end
+
+    for _, plr in ipairs(Players:GetPlayers()) do
+        hookESPCharacter(plr)
     end
 
-    --// Aimbot Logic
-    local function isVisible(targetPart)
-        if not AimSettings.WallCheck then return true end
-        local origin = Camera.CFrame.Position
-        local direction = (targetPart.Position - origin)
-        local raycastParams = RaycastParams.new()
-        raycastParams.FilterDescendantsInstances = {LocalPlayer.Character, Camera}
-        raycastParams.FilterType = Enum.RaycastFilterType.Exclude
-        raycastParams.IgnoreWater = true
-        local result = workspace:Raycast(origin, direction, raycastParams)
-        if result and result.Instance then
-            if result.Instance:IsDescendantOf(targetPart.Parent) then
-                return true
-            end
-            return false
+    Players.PlayerAdded:Connect(function(plr)
+        hookESPCharacter(plr)
+    end)
+
+    Players.PlayerRemoving:Connect(function(plr)
+        removeESPForPlayer(plr)
+    end)
+
+    ------------------------------------------------------------
+    -- INPUT / TARGET HELPERS
+    ------------------------------------------------------------
+
+    local function sameInput(input, bind)
+        if bind == nil or typeof(bind) ~= "EnumItem" then return false end
+
+        if bind.EnumType == Enum.KeyCode then
+            return input.KeyCode == bind
+        elseif bind.EnumType == Enum.UserInputType then
+            return input.UserInputType == bind
         end
+
+        return false
+    end
+
+    local function isBindDown(bind)
+        if bind == nil or typeof(bind) ~= "EnumItem" then return false end
+
+        if bind.EnumType == Enum.KeyCode then
+            return UserInputService:IsKeyDown(bind)
+        elseif bind.EnumType == Enum.UserInputType then
+            return UserInputService:IsMouseButtonPressed(bind)
+        end
+
+        return false
+    end
+
+    local function isAlive(player)
+        local character = player and player.Character
+        if not character then return false end
+
+        local humanoid = character:FindFirstChildOfClass("Humanoid")
+        local root = character:FindFirstChild("HumanoidRootPart")
+
+        return humanoid and root and humanoid.Health > 0
+    end
+
+    local function getAimParts(character, mode)
+        local parts = {}
+        if not character then return parts end
+
+        if mode == "Head" then
+            local head = character:FindFirstChild("Head")
+            if head then table.insert(parts, head) end
+        elseif mode == "RootPart" then
+            local root = character:FindFirstChild("HumanoidRootPart")
+            if root then table.insert(parts, root) end
+        else
+            for _, partName in ipairs({"Head", "HumanoidRootPart", "UpperTorso", "Torso", "LowerTorso"}) do
+                local part = character:FindFirstChild(partName)
+                if part then table.insert(parts, part) end
+            end
+        end
+
+        return parts
+    end
+
+    local function isVisible(part, targetPos)
+        if not part then return false end
+
+        local camera = workspace.CurrentCamera
+        if not camera then return true end
+
+        local origin = camera.CFrame.Position
+        local pos = targetPos or part.Position
+        local direction = pos - origin
+
+        if direction.Magnitude < 0.1 then return true end
+
+        local params = RaycastParams.new()
+        params.FilterDescendantsInstances = {LocalPlayer.Character, camera}
+        params.FilterType = Enum.RaycastFilterType.Exclude
+        params.IgnoreWater = true
+
+        local result = workspace:Raycast(origin, direction, params)
+        if result and result.Instance then
+            return result.Instance:IsDescendantOf(part.Parent or workspace)
+        end
+
         return true
     end
 
-    local function getTarget()
-        if not AimSettings.Enabled then return nil, nil end
+    local function shouldLegitAim()
+        if not Legit.Enabled then return false end
+
+        if Legit.Mode == "Always" then
+            return true
+        elseif Legit.Mode == "Toggle" then
+            return Legit.ActiveToggle
+        elseif Legit.Mode == "Hold" then
+            return isBindDown(Legit.Keybind)
+        end
+
+        return false
+    end
+
+    local function shouldTrigger()
+        if not Legit.Enabled then return false end
+
+        if Legit.TriggerMode == "Always" then
+            return true
+        elseif Legit.TriggerMode == "Toggle" then
+            return Legit.TriggerActiveToggle
+        elseif Legit.TriggerMode == "Hold" then
+            return isBindDown(Legit.TriggerKey)
+        end
+
+        return false
+    end
+
+    local function shouldRageAim()
+        if not Rage.Enabled then return false end
+
+        if Rage.Mode == "Always" then
+            return true
+        elseif Rage.Mode == "Toggle" then
+            return Rage.ActiveToggle
+        elseif Rage.Mode == "Hold" then
+            return isBindDown(Rage.Keybind)
+        end
+
+        return false
+    end
+
+    local function moveMouseRelative(x, y)
+        if mousemoverel then
+            mousemoverel(x, y)
+        elseif mousemoveRelative then
+            mousemoveRelative(x, y)
+        end
+    end
+
+    ------------------------------------------------------------
+    -- LEGIT TARGET
+    ------------------------------------------------------------
+
+    local function getLegitTarget()
+        local camera = workspace.CurrentCamera
+        if not camera then return nil, nil end
+
         local mouse = UserInputService:GetMouseLocation()
 
-        if AimSettings.StickToTarget and currentTargetPart then
-            if currentTargetPart.Parent and currentTargetPart.Parent:FindFirstChild("Humanoid") and currentTargetPart.Parent.Humanoid.Health > 0 then
-                local screenPos, onScreen = Camera:WorldToViewportPoint(currentTargetPart.Position)
+        if Legit.StickToTarget and currentTargetPart and currentTargetPart.Parent then
+            local humanoid = currentTargetPart.Parent:FindFirstChildOfClass("Humanoid")
+            if humanoid and humanoid.Health > 0 then
+                local screenPos, onScreen = camera:WorldToViewportPoint(currentTargetPart.Position)
                 if onScreen then
                     local mag = (Vector2.new(screenPos.X, screenPos.Y) - mouse).Magnitude
-                    if mag <= AimSettings.FOV and isVisible(currentTargetPart) then
+                    if mag <= Legit.FOV and isVisible(currentTargetPart) then
                         return screenPos, currentTargetPart
                     end
                 end
             end
+
             currentTargetPart = nil
         end
 
-        local closestPos = nil
-        local closestPart = nil
-        local dist = AimSettings.FOV
+        local bestPos = nil
+        local bestPart = nil
+        local bestDist = Legit.FOV
 
-        for _, p in ipairs(Players:GetPlayers()) do
-            if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("Humanoid") and p.Character.Humanoid.Health > 0 then
-                local partsToCheck = {}
-                if AimSettings.AimPart == "Head" then
-                    table.insert(partsToCheck, p.Character:FindFirstChild("Head"))
-                elseif AimSettings.AimPart == "RootPart" then
-                    table.insert(partsToCheck, p.Character:FindFirstChild("HumanoidRootPart"))
-                elseif AimSettings.AimPart == "All" then
-                    for _, partName in ipairs({"Head", "HumanoidRootPart", "UpperTorso", "Torso", "LowerTorso"}) do
-                        table.insert(partsToCheck, p.Character:FindFirstChild(partName))
+        for _, player in ipairs(Players:GetPlayers()) do
+            if player ~= LocalPlayer and isAlive(player) then
+                for _, part in ipairs(getAimParts(player.Character, Legit.AimPart)) do
+                    local screenPos, onScreen = camera:WorldToViewportPoint(part.Position)
+                    if onScreen then
+                        local mag = (Vector2.new(screenPos.X, screenPos.Y) - mouse).Magnitude
+                        if mag < bestDist and isVisible(part) then
+                            bestDist = mag
+                            bestPos = screenPos
+                            bestPart = part
+                        end
                     end
                 end
+            end
+        end
 
-                for _, part in ipairs(partsToCheck) do
-                    if part then
-                        local screenPos, onScreen = Camera:WorldToViewportPoint(part.Position)
-                        if onScreen then
-                            local mag = (Vector2.new(screenPos.X, screenPos.Y) - mouse).Magnitude
-                            if mag < dist and isVisible(part) then
-                                dist = mag
-                                closestPos = screenPos
-                                closestPart = part
+        if bestPart then
+            currentTargetPart = bestPart
+        end
+
+        return bestPos, bestPart
+    end
+
+    ------------------------------------------------------------
+    -- TRIGGER TARGET
+    ------------------------------------------------------------
+
+    local function getTriggerTarget()
+        local camera = workspace.CurrentCamera
+        if not camera then return nil end
+
+        local mouse = UserInputService:GetMouseLocation()
+        local bestPart = nil
+        local bestDist = 20 -- небольшой радиус вокруг прицела
+
+        for _, player in ipairs(Players:GetPlayers()) do
+            if player ~= LocalPlayer and isAlive(player) then
+                for _, part in ipairs(getAimParts(player.Character, Legit.TriggerPart)) do
+                    local screenPos, onScreen = camera:WorldToViewportPoint(part.Position)
+                    if onScreen then
+                        local mag = (Vector2.new(screenPos.X, screenPos.Y) - mouse).Magnitude
+                        if mag < bestDist and isVisible(part) then
+                            bestDist = mag
+                            bestPart = part
+                        end
+                    end
+                end
+            end
+        end
+
+        return bestPart
+    end
+
+    ------------------------------------------------------------
+    -- RAGE TARGET
+    ------------------------------------------------------------
+
+    local function getRageTarget()
+        local camera = workspace.CurrentCamera
+        if not camera then return nil end
+
+        local camCF = camera.CFrame
+        local best = nil
+
+        for _, player in ipairs(Players:GetPlayers()) do
+            if player ~= LocalPlayer and isAlive(player) then
+                local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
+
+                for _, part in ipairs(getAimParts(player.Character, Rage.AimPart)) do
+                    local velocity = Vector3.zero
+                    pcall(function()
+                        velocity = part.AssemblyLinearVelocity or Vector3.zero
+                    end)
+
+                    local predictedPos = part.Position + velocity * Rage.Prediction
+                    local offset = predictedPos - camCF.Position
+                    local dist = offset.Magnitude
+
+                    if dist > 0.01 and (Rage.MaxDistance <= 0 or dist <= Rage.MaxDistance) then
+                        local dot = math.clamp(camCF.LookVector:Dot(offset.Unit), -1, 1)
+                        local angle = math.deg(math.acos(dot))
+
+                        if Rage.FOV >= 360 or angle <= (Rage.FOV / 2) then
+                            if (not Rage.WallCheck) or isVisible(part, predictedPos) then
+                                local score = angle
+
+                                if Rage.Priority == "Closest" then
+                                    score = dist
+                                elseif Rage.Priority == "Health" then
+                                    score = humanoid and humanoid.Health or 999999
+                                end
+
+                                if not best or score < best.score then
+                                    best = {
+                                        part = part,
+                                        pos = predictedPos,
+                                        angle = angle,
+                                        dist = dist,
+                                        score = score,
+                                        humanoid = humanoid,
+                                    }
+                                end
                             end
                         end
                     end
@@ -5141,723 +5532,1591 @@ local function initAimbotModule(desyncTabs, musicTabs)
             end
         end
 
-        if closestPart then
-            currentTargetPart = closestPart
-        end
-        return closestPos, closestPart
+        return best
     end
 
-    --// Main Aimbot Loop
-    local function startAimbotLoop()
-        if renderConnection then renderConnection:Disconnect() end
-        renderConnection = RunService.RenderStepped:Connect(function()
-            -- FOV Circle
+    ------------------------------------------------------------
+    -- ENABLE / DISABLE FUNCTIONS
+    ------------------------------------------------------------
+
+    local function setLegitEnabled(v)
+        v = v and true or false
+
+        if Legit.Enabled == v then return end
+
+        if v and Rage.Enabled then
+            Rage.Enabled = false
+            Rage.ActiveToggle = false
+        end
+
+        Legit.Enabled = v
+
+        if not Legit.Enabled then
+            Legit.ActiveToggle = false
+            Legit.TriggerActiveToggle = false
+            currentTargetPart = nil
+            triggerTargetPart = nil
+            triggerFirstSeen = 0
+        end
+
+        if refreshAimUI then refreshAimUI() end
+        saveAimAuto()
+    end
+
+    local function setRageEnabled(v)
+        v = v and true or false
+
+        if Rage.Enabled == v then return end
+
+        if v and Legit.Enabled then
+            Legit.Enabled = false
+            Legit.ActiveToggle = false
+            Legit.TriggerActiveToggle = false
+            currentTargetPart = nil
+            triggerTargetPart = nil
+            triggerFirstSeen = 0
+        end
+
+        Rage.Enabled = v
+
+        if not Rage.Enabled then
+            Rage.ActiveToggle = false
+            rageTargetPart = nil
+            rageFirstSeen = 0
+        end
+
+        if refreshAimUI then refreshAimUI() end
+        saveAimAuto()
+    end
+
+    setESPEnabled = function(state)
+        ESPSettings.Enabled = state and true or false
+
+        if ESPSettings.Enabled then
+            cleanESP()
+            for _, player in ipairs(Players:GetPlayers()) do
+                if player ~= LocalPlayer and player.Character then
+                    createESP(player)
+                end
+            end
+            updateESP()
+        else
+            cleanESP()
+        end
+
+        if refreshAimUI then refreshAimUI() end
+        saveAimAuto()
+    end
+
+    ------------------------------------------------------------
+    -- MAIN LOOP
+    ------------------------------------------------------------
+
+    local function ensureMainLoop()
+        if mainLoopConnection then return end
+
+        mainLoopConnection = RunService.RenderStepped:Connect(function()
+            local camera = workspace.CurrentCamera
+
+            -- FOV circle
             if fovCircle then
-                fovCircle.Visible = AimSettings.DrawFOV and AimSettings.Enabled
-                fovCircle.Radius = AimSettings.FOV
+                fovCircle.Visible = Legit.Enabled and Legit.DrawFOV
+                fovCircle.Radius = Legit.FOV
                 fovCircle.Position = UserInputService:GetMouseLocation()
                 fovCircle.Color = ESPSettings.Color
             end
 
-            -- ESP Update (throttled)
-            if tick() % 0.1 < 0.02 then
-                for _, p in ipairs(Players:GetPlayers()) do
-                    if p ~= LocalPlayer and not ESP_Instances[p] and p.Character then
-                        createESP(p)
+            -- ESP update
+            if ESPSettings.Enabled and tick() % 0.1 < 0.02 then
+                for _, player in ipairs(Players:GetPlayers()) do
+                    if player ~= LocalPlayer and not ESP_Instances[player] and player.Character then
+                        createESP(player)
                     end
                 end
                 updateESP()
             end
 
-            -- Aimbot
-            local shouldAim = false
-            if AimSettings.Mode == "Always" then
-                shouldAim = true
-            elseif AimSettings.Mode == "Toggle" then
-                shouldAim = AimSettings.ActiveToggle
-            elseif AimSettings.Mode == "Hold" then
-                local bind = AimSettings.Keybind
-                if typeof(bind) == "EnumItem" then
-                    if bind.EnumType == Enum.KeyCode then
-                        shouldAim = UserInputService:IsKeyDown(bind)
-                    elseif bind.EnumType == Enum.UserInputType then
-                        shouldAim = UserInputService:IsMouseButtonPressed(bind)
-                    end
-                end
+            -- Hard safety: Rage всегда выше Legit
+            if Rage.Enabled and Legit.Enabled then
+                Legit.Enabled = false
+                if refreshSidebarTexts then refreshSidebarTexts() end
             end
 
-            if shouldAim and AimSettings.Enabled then
-                local targetPos, targetPart = getTarget()
-                if targetPos then
-                    local mousePos = UserInputService:GetMouseLocation()
-                    local dx = (targetPos.X - mousePos.X) * AimSettings.Sensitivity
-                    local dy = (targetPos.Y - mousePos.Y) * AimSettings.Sensitivity
-                    if mousemoverel then
-                        mousemoverel(dx / (AimSettings.Smoothness * 10), dy / (AimSettings.Smoothness * 10))
-                    end
-                    if AimSettings.AutoFire and mouse1click then
-                        if tick() - lastFire > 0.05 then
-                            mouse1click()
-                            lastFire = tick()
-                        end
+            ------------------------------------------------------------
+            -- LEGITBOT
+            ------------------------------------------------------------
+            if Legit.Enabled and not Rage.Enabled then
+                if shouldLegitAim() then
+                    local targetPos, targetPart = getLegitTarget()
+
+                    if targetPos then
+                        currentTargetPart = targetPart
+
+                        local mousePos = UserInputService:GetMouseLocation()
+                        local dx = (targetPos.X - mousePos.X) * Legit.Sensitivity
+                        local dy = (targetPos.Y - mousePos.Y) * Legit.Sensitivity
+
+                        local divisor = math.clamp(Legit.Smoothness, 0.1, 1) * 10
+                        moveMouseRelative(dx / divisor, dy / divisor)
+                    else
+                        currentTargetPart = nil
                     end
                 else
                     currentTargetPart = nil
                 end
+
+                -- Triggerbot
+                if shouldTrigger() then
+                    local triggerPart = getTriggerTarget()
+
+                    if triggerPart and isVisible(triggerPart) then
+                        if triggerTargetPart ~= triggerPart then
+                            triggerTargetPart = triggerPart
+                            triggerFirstSeen = tick()
+                        end
+
+                        if tick() - triggerFirstSeen >= Legit.TriggerTime and tick() - lastTriggerShot > 0.05 then
+                            if mouse1click then
+                                mouse1click()
+                            end
+                            lastTriggerShot = tick()
+                        end
+                    else
+                        triggerTargetPart = nil
+                        triggerFirstSeen = 0
+                    end
+                else
+                    triggerTargetPart = nil
+                    triggerFirstSeen = 0
+                end
             else
                 currentTargetPart = nil
+                triggerTargetPart = nil
+                triggerFirstSeen = 0
             end
-        end)
-    end
 
-    local function stopAimbotLoop()
-        if renderConnection then
-            renderConnection:Disconnect()
-            renderConnection = nil
-        end
-        if fovCircle then
-            fovCircle.Visible = false
-        end
-        currentTargetPart = nil
-    end
+            ------------------------------------------------------------
+            -- RAGEBOT
+            ------------------------------------------------------------
+            if Rage.Enabled and not Legit.Enabled then
+                if shouldRageAim() then
+                    local target = getRageTarget()
 
-    --// Keybind Listener
-    local function startKeybindListener()
-        if aimInputConnection then aimInputConnection:Disconnect() end
-        aimInputConnection = UserInputService.InputBegan:Connect(function(input, gpe)
-            if gpe then return end
-            if input.KeyCode == AimKeybinds.ToggleAimbot then
-                AimSettings.Enabled = not AimSettings.Enabled
-                if AimSettings.Enabled then
-                    startAimbotLoop()
+                    if target then
+                        if camera then
+                            local desired = CFrame.lookAt(camera.CFrame.Position, target.pos)
+                            local smooth = math.clamp(Rage.Smoothness, 0, 0.95)
+
+                            if smooth <= 0.01 then
+                                camera.CFrame = desired
+                            else
+                                camera.CFrame = camera.CFrame:Lerp(desired, 1 - smooth)
+                            end
+                        end
+
+                        if Rage.AutoFire then
+                            if rageTargetPart ~= target.part then
+                                rageTargetPart = target.part
+                                rageFirstSeen = tick()
+                            end
+
+                            if target.angle <= Rage.FireAngle
+                                and tick() - rageFirstSeen >= Rage.FireDelay
+                                and tick() - lastRageFire > 0.03
+                            then
+                                if mouse1click then
+                                    mouse1click()
+                                end
+                                lastRageFire = tick()
+                            end
+                        end
+                    else
+                        rageTargetPart = nil
+                        rageFirstSeen = 0
+                    end
                 else
-                    stopAimbotLoop()
+                    rageTargetPart = nil
+                    rageFirstSeen = 0
                 end
-            end
-            if input.KeyCode == AimKeybinds.ToggleESP then
-                setESPEnabled(not ESPSettings.Enabled)
-            end
-            if AimSettings.Mode == "Toggle" then
-                local aimKey = AimSettings.Keybind
-                if input.KeyCode == aimKey or input.UserInputType == aimKey then
-                    AimSettings.ActiveToggle = not AimSettings.ActiveToggle
-                end
+            else
+                rageTargetPart = nil
+                rageFirstSeen = 0
             end
         end)
     end
 
-    --// ESP Player Events
-    Players.PlayerAdded:Connect(function(p)
-        p.CharacterAdded:Connect(function()
-            if ESPSettings.Enabled then
-                task.wait(0.5)
-                createESP(p)
-            end
-        end)
-    end)
+    ------------------------------------------------------------
+    -- KEYBIND LISTENER
+    ------------------------------------------------------------
 
-    Players.PlayerRemoving:Connect(function(p)
-        if ESP_Instances[p] then
-            if ESP_Instances[p].Highlight then ESP_Instances[p].Highlight:Destroy() end
-            if ESP_Instances[p].BillboardTop then ESP_Instances[p].BillboardTop:Destroy() end
-            if ESP_Instances[p].BillboardBottom then ESP_Instances[p].BillboardBottom:Destroy() end
-            ESP_Instances[p] = nil
+    local function startKeybindListener()
+        if aimInputConnection then
+            aimInputConnection:Disconnect()
         end
-    end)
 
-    --// UI Helpers (FuckYou style)
-    local C_GRN = Color3.fromRGB(100, 255, 100)
-    local C_ROFF = Color3.fromRGB(255, 100, 100)
-    local C_REDD = Color3.fromRGB(150, 40, 40)
-    local C_WHT = Color3.fromRGB(255, 255, 255)
+        aimInputConnection = UserInputService.InputBegan:Connect(function(input, gameProcessed)
+            if gameProcessed then return end
 
-    local function corner(p) Instance.new("UICorner", p).CornerRadius = UDim.new(0, 4) end
+            if sameInput(input, Keybinds.ToggleLegitBot) then
+                setLegitEnabled(not Legit.Enabled)
+            end
 
-    local function lighter(c, amt)
-        return Color3.fromRGB(math.min(c.R*255+amt,255), math.min(c.G*255+amt,255), math.min(c.B*255+amt,255))
+            if sameInput(input, Keybinds.ToggleRagebot) then
+                setRageEnabled(not Rage.Enabled)
+            end
+
+            if Legit.Mode == "Toggle" and sameInput(input, Legit.Keybind) then
+                Legit.ActiveToggle = not Legit.ActiveToggle
+            end
+
+            if Legit.TriggerMode == "Toggle" and sameInput(input, Legit.TriggerKey) then
+                Legit.TriggerActiveToggle = not Legit.TriggerActiveToggle
+            end
+
+            if Rage.Mode == "Toggle" and sameInput(input, Rage.Keybind) then
+                Rage.ActiveToggle = not Rage.ActiveToggle
+            end
+        end)
     end
 
-    local function mkLabel(p, txt, sz, pos, font, ts)
-        local l = Instance.new("TextLabel")
-        l.Parent = p; l.Text = txt; l.Size = sz; l.Position = pos
-        l.Font = font or F_S; l.TextSize = 13
-        l.TextXAlignment = Enum.TextXAlignment.Left
-        l.TextColor3 = uiColor_TextColor; l.BackgroundTransparency = 1
-        table.insert(themeElements.Texts, l)
-        return l
+    ------------------------------------------------------------
+    -- UI HELPERS
+    ------------------------------------------------------------
+
+    local function corner(parent)
+        Instance.new("UICorner", parent).CornerRadius = UDim.new(0, 4)
     end
 
-    local function mkBox(p, txt, sz, pos, ts)
-        local b = Instance.new("TextBox")
-        b.Parent = p; b.Text = txt or ""; b.Size = sz; b.Position = pos
-        b.Font = F_R; b.TextSize = 13
-        b.BackgroundColor3 = uiColor_TextBoxColor; b.TextColor3 = uiColor_TextColor
-        b.PlaceholderColor3 = Color3.fromRGB(90, 90, 90)
-        b.BorderSizePixel = 0; b.ClearTextOnFocus = false
-        table.insert(themeElements.TextBoxes, b)
-        table.insert(themeElements.Texts, b)
-        corner(b); return b
+    local function mkLabel(parent, text, size, position, font, textSize)
+        local label = Instance.new("TextLabel")
+        label.Parent = parent
+        label.Text = text
+        label.Size = size
+        label.Position = position
+        label.Font = font or F_S
+        label.TextSize = textSize or 13
+        label.TextXAlignment = Enum.TextXAlignment.Left
+        label.TextColor3 = uiColor_TextColor
+        label.BackgroundTransparency = 1
+        label.TextWrapped = true
+        table.insert(themeElements.Texts, label)
+        return label
     end
 
-    local function mkBtn(p, txt, sz, pos, font, ts, themed, bg, tc)
-        local b = Instance.new("TextButton")
-        b.Parent = p; b.Text = txt; b.Size = sz; b.Position = pos
-        b.Font = font or F_B; b.TextSize = 13
-        b.Text = txt or ""; b.TextWrapped = true
-        b.BackgroundColor3 = bg or uiColor_ButtonColor
-        b.TextColor3 = tc or uiColor_TextColor
-        b.BorderSizePixel = 0
+    local function mkBox(parent, text, size, position, textSize)
+        local box = Instance.new("TextBox")
+        box.Parent = parent
+        box.Text = text or ""
+        box.Size = size
+        box.Position = position
+        box.Font = F_R
+        box.TextSize = textSize or 13
+        box.BackgroundColor3 = uiColor_TextBoxColor
+        box.TextColor3 = uiColor_TextColor
+        box.PlaceholderColor3 = Color3.fromRGB(90, 90, 90)
+        box.BorderSizePixel = 0
+        box.ClearTextOnFocus = false
+        box.BackgroundTransparency = 1 - uiGuiOpacity
+        table.insert(themeElements.TextBoxes, box)
+        table.insert(themeElements.Texts, box)
+        corner(box)
+        return box
+    end
+
+    local function mkBtn(parent, text, size, position, font, textSize, themed, bgColor, textColor)
+        local button = Instance.new("TextButton")
+        button.Parent = parent
+        button.Text = text or ""
+        button.Size = size
+        button.Position = position
+        button.Font = font or F_B
+        button.TextSize = textSize or 13
+        button.TextWrapped = true
+        button.BackgroundColor3 = bgColor or uiColor_ButtonColor
+        button.TextColor3 = textColor or uiColor_TextColor
+        button.BorderSizePixel = 0
+        button.BackgroundTransparency = 1 - uiGuiOpacity
+
         if themed ~= "no" then
-            table.insert(themeElements.Buttons, b)
-            table.insert(themeElements.Texts, b)
+            table.insert(themeElements.Buttons, button)
+            table.insert(themeElements.Texts, button)
         else
-            table.insert(themeElements.CustomButtons, b)
+            table.insert(themeElements.CustomButtons, button)
         end
-        b.BackgroundTransparency = 1 - uiGuiOpacity
-        corner(b); return b
+
+        corner(button)
+        return button
     end
 
-    local function mkPanel(p, sz, pos)
-        local f = Instance.new("Frame")
-        f.Parent = p; f.Size = sz; f.Position = pos or UDim2.new(0,0,0,0)
-        f.BackgroundColor3 = uiColor_SideBar; f.BorderSizePixel = 0
-        f.ClipsDescendants = true
-        table.insert(themeElements.SideBars, f)
-        corner(f); return f
+    local function mkPanel(parent, size, position)
+        local frame = Instance.new("Frame")
+        frame.Parent = parent
+        frame.Size = size
+        frame.Position = position or UDim2.new(0, 0, 0, 0)
+        frame.BackgroundColor3 = uiColor_SideBar
+        frame.BorderSizePixel = 0
+        frame.ClipsDescendants = true
+        table.insert(themeElements.SideBars, frame)
+        corner(frame)
+        return frame
     end
 
-    local function mkToggle(p, name, state, sz, pos, callback)
-	    local btn = mkBtn(p, "", sz, pos, F_B, 14, "no")
-	    local function paint()
-		    btn.Text = name .. ": " .. (state and "ON" or "OFF")
-    		paintToggleBtn(btn, state)
-	    end
-	    paint()
-	    registerToggle(btn, function() return state end)
-	    btn.MouseButton1Click:Connect(function()
-		    state = not state
-		    paint()
-    		if callback then callback(state) end
-	    end)
-	    return {
-		    Button = btn,
-		    Get = function() return state end,
-    		Set = function(v) state = v and true or false; paint() end,
-	    }
-    end
+    ------------------------------------------------------------
+    -- AIM TABS
+    ------------------------------------------------------------
 
-    local function mkDropdown(p, name, options, default, sz, pos, callback)
-    	local current = default
-    	local btn = mkBtn(p, name .. ": " .. tostring(current), sz, pos, F_B, 13)
-    	local function paint() btn.Text = name .. ": " .. tostring(current) end
-    	btn.MouseButton1Click:Connect(function()
-	        local idx = table.find(options, current)
-        	idx = idx and (idx % #options + 1) or 1
-        	current = options[idx]
-        	paint()
-        	if callback then callback(current) end
-    	end)
-    	return {
-	        Button = btn,
-        	Get = function() return current end,
-        	Set = function(v) if table.find(options, v) then current = v; paint() end end,
-    	}
-	end
-
-    --// Build Aim Tabs
     local aimTabs = {}
 
     local function addAimTab(name, builder)
-        local frame = create("Frame", {Name = "Tab" .. name, Parent = Containment, Size = UDim2.new(1,0,1,0), BackgroundTransparency = 1, BorderSizePixel = 0, Visible = false})
-        builder(frame)
-        local btn = create("TextButton", {
-            Name = "ABtn_" .. name, Parent = MenuInsided,
-            Size = UDim2.new(1, 0, 0, 40), LayoutOrder = 300 + #aimTabs, Visible = false,
-            BackgroundColor3 = uiColor_ButtonColor, BorderColor3 = COL_BORDER,
-            TextColor3 = uiColor_TextColor, Text = name, Font = FONT, TextSize = 12,
-            TextWrapped = true
+        local frame = create("Frame", {
+            Name = "Tab" .. name,
+            Parent = Containment,
+            Size = UDim2.new(1, 0, 1, 0),
+            BackgroundTransparency = 1,
+            BorderSizePixel = 0,
+            Visible = false,
         })
-        local entry = {Frame = frame, Name = name, Button = btn}
+
+        builder(frame)
+
+        local button = create("TextButton", {
+            Name = "ABtn_" .. name,
+            Parent = MenuInsided,
+            Size = UDim2.new(1, 0, 0, 40),
+            LayoutOrder = 300 + #aimTabs,
+            Visible = false,
+            BackgroundColor3 = uiColor_ButtonColor,
+            BorderColor3 = COL_BORDER,
+            TextColor3 = uiColor_TextColor,
+            Text = name,
+            Font = FONT,
+            TextSize = 12,
+            TextWrapped = true,
+        })
+
+        local entry = {
+            Frame = frame,
+            Name = name,
+            Button = button,
+        }
+
         table.insert(aimTabs, entry)
-        table.insert(themeElements.Buttons, btn)
-        table.insert(themeElements.Texts, btn)
+        table.insert(themeElements.Buttons, button)
+        table.insert(themeElements.Texts, button)
+
         return entry
     end
 
-    --// TAB 1: AIM
-    local function buildAimTab(parent)
-    	local sf = create("ScrollingFrame", {Parent = parent, Size = UDim2.new(1,0,1,0), BackgroundTransparency = 1, BorderSizePixel = 0, ScrollBarThickness = 4, CanvasSize = UDim2.new(0,0,0,420)})
-    	local inner = mkPanel(sf, UDim2.new(1,0,0,420))
-    	local y = 10
-	    uiRefs.modeDD = mkDropdown(inner, "Mode", {"Hold", "Toggle", "Always"}, AimSettings.Mode, UDim2.new(1,-24,0,28), UDim2.new(0,12,0,y), function(val)
-        	AimSettings.Mode = val; AimSettings.ActiveToggle = false; saveAimAuto()
-	    end)
-    	y = y + 34
-    	uiRefs.aimPartDD = mkDropdown(inner, "Aim Part", {"Head", "RootPart", "All"}, AimSettings.AimPart, UDim2.new(1,-24,0,28), UDim2.new(0,12,0,y), function(val)
-	        AimSettings.AimPart = val; saveAimAuto()
-	    end)
-	    y = y + 34
-    	uiRefs.stickToggle = mkToggle(inner, "Stick To Target", AimSettings.StickToTarget, UDim2.new(1,-24,0,28), UDim2.new(0,12,0,y), function(state)
-	        AimSettings.StickToTarget = state; saveAimAuto()
-	    end)
-	    y = y + 34
-	    uiRefs.wallToggle = mkToggle(inner, "Wall Check", AimSettings.WallCheck, UDim2.new(1,-24,0,28), UDim2.new(0,12,0,y), function(state)
-        	AimSettings.WallCheck = state; saveAimAuto()
-    	end)
-    	y = y + 34
-    	uiRefs.autoFireToggle = mkToggle(inner, "Auto Fire", AimSettings.AutoFire, UDim2.new(1,-24,0,28), UDim2.new(0,12,0,y), function(state)
-	        AimSettings.AutoFire = state; saveAimAuto()
-	    end)
-	    y = y + 34
-    	uiRefs.drawFovToggle = mkToggle(inner, "Draw FOV", AimSettings.DrawFOV, UDim2.new(1,-24,0,28), UDim2.new(0,12,0,y), function(state)
-	        AimSettings.DrawFOV = state
-        	if fovCircle then fovCircle.Visible = state and AimSettings.Enabled end
-        	saveAimAuto()
-    	end)
-    	y = y + 34
-    	uiRefs.fovLabel = mkLabel(inner, "FOV Radius: " .. AimSettings.FOV, UDim2.new(1,-24,0,18), UDim2.new(0,12,0,y), F_S, 14)
-    	y = y + 20
-    	uiRefs.fovBox = mkBox(inner, tostring(AimSettings.FOV), UDim2.new(1,-24,0,24), UDim2.new(0,12,0,y), 14)
-    	uiRefs.fovBox.FocusLost:Connect(function(enter)
-	        if enter then
-            	local val = tonumber(uiRefs.fovBox.Text)
-            	if val then
-	                val = math.clamp(val, 10, 500)
-                	uiRefs.fovBox.Text = tostring(val)
-                	AimSettings.FOV = val
-                	uiRefs.fovLabel.Text = "FOV Radius: " .. val
-                	saveAimAuto()
-            	end
-        	end
-	    end)
-    	y = y + 32
-    	uiRefs.smoothLabel = mkLabel(inner, "Smoothness: " .. AimSettings.Smoothness, UDim2.new(1,-24,0,18), UDim2.new(0,12,0,y), F_S, 14)
-    	y = y + 20
-    	uiRefs.smoothBox = mkBox(inner, tostring(AimSettings.Smoothness), UDim2.new(1,-24,0,24), UDim2.new(0,12,0,y), 14)
-	    uiRefs.smoothBox.FocusLost:Connect(function(enter)
-        	if enter then
-	            local val = tonumber(uiRefs.smoothBox.Text)
-            	if val then
-	                val = math.clamp(val, 0.1, 1.0)
-                	uiRefs.smoothBox.Text = tostring(val)
-                	AimSettings.Smoothness = val
-                	uiRefs.smoothLabel.Text = "Smoothness: " .. val
-                	saveAimAuto()
-            	end
-        	end
-    	end)
-	end
+    ------------------------------------------------------------
+    -- SETTING ROWS
+    ------------------------------------------------------------
 
-    --// TAB 2: ESP
-    setESPEnabled = function(state)
-    ESPSettings.Enabled = state
-    if state then
-        for _, p in ipairs(Players:GetPlayers()) do
-            if p ~= LocalPlayer and not ESP_Instances[p] and p.Character then createESP(p) end
+    local function mkToggleRow(parent, labelText, y, get, set, noSave)
+        local button = mkBtn(parent, "", UDim2.new(1, -24, 0, 28), UDim2.new(0, 12, 0, y), F_B, 13)
+
+        local function refresh()
+            button.Text = labelText .. ": " .. (get() and "ON" or "OFF")
+            paintToggleBtn(button, get())
         end
-            updateESP()          -- сразу заполняет Name/Username/HP/Distance
-            startESPLoop()
-        else
-            stopESPLoop()
-            updateESP()          -- прячет билборды при выключении
-        end
-        if uiRefs.espToggle then uiRefs.espToggle.Set(state) end
-        if uiRefs.enableESPToggle then uiRefs.enableESPToggle.Set(state) end
-        if refreshESPToggleText then refreshESPToggleText() end
-        saveAimAuto()
-    end
-	local function buildESPTab(parent)
-	    local sf = create("ScrollingFrame", {Parent = parent, Size = UDim2.new(1,0,1,0), BackgroundTransparency = 1, BorderSizePixel = 0, ScrollBarThickness = 4, CanvasSize = UDim2.new(0,0,0,400)})
-	    local inner = mkPanel(sf, UDim2.new(1,0,0,400))
-	    local y = 10
-    	local refreshBtn = mkBtn(inner, "Refresh ESP (Update Players)", UDim2.new(1,-24,0,28), UDim2.new(0,12,0,y), F_B, 13)
-    	refreshBtn.MouseButton1Click:Connect(function()
-            cleanESP()
-            for _, p in ipairs(Players:GetPlayers()) do
-                if p ~= LocalPlayer and p.Character then createESP(p) end
+
+        registerToggle(button, get)
+
+        button.MouseButton1Click:Connect(function()
+            set(not get())
+            pcall(refresh)
+            if not noSave then
+                saveAimAuto()
             end
-            updateESP()
+        end)
+
+        addRefresh(refresh)
+        refresh()
+
+        return {
+            Button = button,
+            Refresh = refresh,
+        }
+    end
+
+    local function mkDropdownRow(parent, labelText, options, y, get, set)
+        local button = mkBtn(parent, "", UDim2.new(1, -24, 0, 28), UDim2.new(0, 12, 0, y), F_B, 13)
+
+        local function refresh()
+            button.Text = labelText .. ": " .. tostring(get())
+        end
+
+        button.MouseButton1Click:Connect(function()
+            local index = table.find(options, get()) or 0
+            set(options[(index % #options) + 1])
+            refresh()
+            saveAimAuto()
+        end)
+
+        addRefresh(refresh)
+        refresh()
+
+        return {
+            Button = button,
+            Refresh = refresh,
+        }
+    end
+
+    local function mkNumRow(parent, labelText, y, get, set, min, max, decimals)
+        local container = create("Frame", {
+            Parent = parent,
+            Size = UDim2.new(1, -24, 0, 46),
+            Position = UDim2.new(0, 12, 0, y),
+            BackgroundTransparency = 1,
+        })
+
+        local label = create("TextLabel", {
+            Parent = container,
+            Size = UDim2.new(1, 0, 0, 18),
+            BackgroundTransparency = 1,
+            Text = labelText,
+            TextColor3 = uiColor_TextColor,
+            TextSize = 13,
+            Font = FONT,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            TextWrapped = true,
+        })
+
+        table.insert(themeElements.Texts, label)
+
+        local box = create("TextBox", {
+            Parent = container,
+            Size = UDim2.new(1, 0, 0, 24),
+            Position = UDim2.new(0, 0, 0, 20),
+            BackgroundColor3 = uiColor_TextBoxColor,
+            BorderColor3 = COL_BORDER,
+            TextColor3 = uiColor_TextColor,
+            PlaceholderColor3 = Color3.fromRGB(90, 90, 90),
+            Text = tostring(get()),
+            TextSize = 13,
+            Font = FONT,
+            ClearTextOnFocus = false,
+            BackgroundTransparency = 1 - uiGuiOpacity,
+        })
+
+        table.insert(themeElements.TextBoxes, box)
+        table.insert(themeElements.Texts, box)
+
+        local function refresh()
+            local value = get()
+
+            if decimals and decimals > 0 then
+                label.Text = labelText .. " [" .. string.format("%." .. tostring(decimals) .. "f", value) .. "]"
+            else
+                label.Text = labelText .. " [" .. tostring(value) .. "]"
+            end
+
+            box.Text = tostring(value)
+        end
+
+        box.FocusLost:Connect(function(enterPressed)
+            if enterPressed then
+                local value = tonumber(box.Text)
+                if value then
+                    if decimals and decimals > 0 then
+                        local step = 10 ^ (-decimals)
+                        value = math.floor(value / step + 0.5) * step
+                    end
+
+                    set(math.clamp(value, min, max))
+                end
+            end
+
+            refresh()
+            saveAimAuto()
+        end)
+
+        addRefresh(refresh)
+        refresh()
+
+        return {
+            Frame = container,
+            Refresh = refresh,
+        }
+    end
+
+    local function mkBindRow(parent, labelText, y, get, set)
+        local button = mkBtn(parent, "", UDim2.new(1, -24, 0, 28), UDim2.new(0, 12, 0, y), F_B, 13)
+        local waiting = false
+
+        local function refresh()
+            button.Text = labelText .. ": [" .. displayKeyName(get()) .. "]"
+            button.TextColor3 = uiColor_TextColor
+        end
+
+        button.MouseButton1Click:Connect(function()
+            if waiting then return end
+
+            waiting = true
+            button.Text = labelText .. ": [PRESS ANY KEY | BACKSPACE = CLEAR]"
+            button.TextColor3 = Color3.fromRGB(255, 255, 0)
+
+            local connection
+            connection = UserInputService.InputBegan:Connect(function(input, gameProcessed)
+                if gameProcessed then return end
+                if not waiting then return end
+
+                -- Backspace очищает бинд
+                if input.KeyCode == Enum.KeyCode.Backspace then
+                    set(nil)
+                    refresh()
+
+                    saveAimAuto()
+                    if autoSaveConfig then
+                        autoSaveConfig(true)
+                    end
+
+                    waiting = false
+                    if connection then connection:Disconnect() end
+                    return
+                end
+
+                local newKey = input.KeyCode ~= Enum.KeyCode.Unknown and input.KeyCode or input.UserInputType
+
+                if newKey == Enum.KeyCode.Unknown or newKey == Enum.UserInputType.None then
+                    return
+                end
+
+                set(newKey)
+                refresh()
+
+                saveAimAuto()
+                if autoSaveConfig then
+                    autoSaveConfig(true)
+                end
+
+                waiting = false
+                if connection then connection:Disconnect() end
+            end)
+
+            task.delay(5, function()
+                if waiting then
+                    waiting = false
+                    refresh()
+                    if connection then connection:Disconnect() end
+                end
+            end)
+        end)
+
+        addRefresh(refresh)
+        refresh()
+
+        return {
+            Button = button,
+            Refresh = refresh,
+        }
+    end
+
+    ------------------------------------------------------------
+    -- TAB: LEGITBOT
+    ------------------------------------------------------------
+
+    local function buildLegitTab(parent)
+        local scroll = create("ScrollingFrame", {
+            Parent = parent,
+            Size = UDim2.new(1, 0, 1, 0),
+            BackgroundTransparency = 1,
+            BorderSizePixel = 0,
+            ScrollBarThickness = 4,
+            CanvasSize = UDim2.new(0, 0, 0, 700),
+        })
+
+        local inner = mkPanel(scroll, UDim2.new(1, 0, 0, 700))
+        local y = 10
+
+        mkToggleRow(inner, "LegitBot", y, function()
+            return Legit.Enabled
+        end, function(v)
+            setLegitEnabled(v)
+        end, true)
+        y = y + 34
+
+        mkDropdownRow(inner, "Mode", {"Hold", "Toggle", "Always"}, y, function()
+            return Legit.Mode
+        end, function(v)
+            Legit.Mode = v
+        end)
+        y = y + 34
+
+        mkDropdownRow(inner, "Aim Part", {"All", "Head", "RootPart"}, y, function()
+            return Legit.AimPart
+        end, function(v)
+            Legit.AimPart = v
+        end)
+        y = y + 34
+
+        mkToggleRow(inner, "Stick To Target", y, function()
+            return Legit.StickToTarget
+        end, function(v)
+            Legit.StickToTarget = v
+        end)
+        y = y + 34
+
+        mkToggleRow(inner, "Wall Check", y, function()
+            return Legit.WallCheck
+        end, function(v)
+            Legit.WallCheck = v
+        end)
+        y = y + 34
+
+        mkToggleRow(inner, "Draw FOV", y, function()
+            return Legit.DrawFOV
+        end, function(v)
+            Legit.DrawFOV = v
+        end)
+        y = y + 34
+
+        mkNumRow(inner, "FOV Radius", y, function()
+            return Legit.FOV
+        end, function(v)
+            Legit.FOV = v
+        end, 10, 1000, 0)
+        y = y + 52
+
+        mkNumRow(inner, "Smoothness", y, function()
+            return Legit.Smoothness
+        end, function(v)
+            Legit.Smoothness = v
+        end, 0, 1, 2)
+        y = y + 52
+
+        mkNumRow(inner, "Sensitivity", y, function()
+            return Legit.Sensitivity
+        end, function(v)
+            Legit.Sensitivity = v
+        end, 0.05, 2, 2)
+        y = y + 56
+
+        mkLabel(inner, "Triggerbot", UDim2.new(1, -24, 0, 20), UDim2.new(0, 12, 0, y), F_S, 14)
+        y = y + 24
+
+        mkDropdownRow(inner, "Triggerbot Mode", {"Hold", "Toggle", "Always"}, y, function()
+            return Legit.TriggerMode
+        end, function(v)
+            Legit.TriggerMode = v
+        end)
+        y = y + 34
+
+        mkDropdownRow(inner, "Trigger Part", {"All", "Head", "RootPart"}, y, function()
+            return Legit.TriggerPart
+        end, function(v)
+            Legit.TriggerPart = v
+        end)
+        y = y + 34
+
+        mkNumRow(inner, "Triggerbot Time", y, function()
+            return Legit.TriggerTime
+        end, function(v)
+            Legit.TriggerTime = v
+        end, 0, 1, 2)
+    end
+
+    ------------------------------------------------------------
+    -- TAB: RAGEBOT
+    ------------------------------------------------------------
+
+    local function buildRageTab(parent)
+        local scroll = create("ScrollingFrame", {
+            Parent = parent,
+            Size = UDim2.new(1, 0, 1, 0),
+            BackgroundTransparency = 1,
+            BorderSizePixel = 0,
+            ScrollBarThickness = 4,
+            CanvasSize = UDim2.new(0, 0, 0, 780),
+        })
+
+        local inner = mkPanel(scroll, UDim2.new(1, 0, 0, 780))
+        local y = 10
+
+        mkToggleRow(inner, "Ragebot", y, function()
+            return Rage.Enabled
+        end, function(v)
+            setRageEnabled(v)
+        end, true)
+        y = y + 34
+
+        mkDropdownRow(inner, "Mode", {"Always", "Hold", "Toggle"}, y, function()
+            return Rage.Mode
+        end, function(v)
+            Rage.Mode = v
+        end)
+        y = y + 34
+
+        mkDropdownRow(inner, "Aim Part", {"Head", "RootPart", "All"}, y, function()
+            return Rage.AimPart
+        end, function(v)
+            Rage.AimPart = v
+        end)
+        y = y + 34
+
+        mkDropdownRow(inner, "Priority", {"Closest", "Angle", "Health"}, y, function()
+            return Rage.Priority
+        end, function(v)
+            Rage.Priority = v
+        end)
+        y = y + 34
+
+        mkToggleRow(inner, "Wall Check", y, function()
+            return Rage.WallCheck
+        end, function(v)
+            Rage.WallCheck = v
+        end)
+        y = y + 34
+
+        mkToggleRow(inner, "Auto Fire", y, function()
+            return Rage.AutoFire
+        end, function(v)
+            Rage.AutoFire = v
+        end)
+        y = y + 34
+
+        mkNumRow(inner, "FOV Around Player", y, function()
+            return Rage.FOV
+        end, function(v)
+            Rage.FOV = v
+        end, 0, 360, 0)
+        y = y + 52
+
+        mkNumRow(inner, "Fire Angle", y, function()
+            return Rage.FireAngle
+        end, function(v)
+            Rage.FireAngle = v
+        end, 0, 45, 1)
+        y = y + 52
+
+        mkNumRow(inner, "Fire Delay", y, function()
+            return Rage.FireDelay
+        end, function(v)
+            Rage.FireDelay = v
+        end, 0, 1, 2)
+        y = y + 52
+
+        mkNumRow(inner, "Smoothness", y, function()
+            return Rage.Smoothness
+        end, function(v)
+            Rage.Smoothness = v
+        end, 0, 0.95, 2)
+        y = y + 52
+
+        mkNumRow(inner, "Prediction", y, function()
+            return Rage.Prediction
+        end, function(v)
+            Rage.Prediction = v
+        end, 0, 1, 2)
+        y = y + 52
+
+        mkNumRow(inner, "Max Distance (0 = unlimited)", y, function()
+            return Rage.MaxDistance
+        end, function(v)
+            Rage.MaxDistance = v
+        end, 0, 100000, 0)
+    end
+
+    ------------------------------------------------------------
+    -- TAB: ESP
+    ------------------------------------------------------------
+
+    local function buildESPTab(parent)
+        local scroll = create("ScrollingFrame", {
+            Parent = parent,
+            Size = UDim2.new(1, 0, 1, 0),
+            BackgroundTransparency = 1,
+            BorderSizePixel = 0,
+            ScrollBarThickness = 4,
+            CanvasSize = UDim2.new(0, 0, 0, 460),
+        })
+
+        local inner = mkPanel(scroll, UDim2.new(1, 0, 0, 460))
+        local y = 10
+
+        local refreshBtn = mkBtn(inner, "Refresh ESP (Update Players)", UDim2.new(1, -24, 0, 28), UDim2.new(0, 12, 0, y), F_B, 13)
+        refreshBtn.MouseButton1Click:Connect(function()
+            setESPEnabled(ESPSettings.Enabled)
             refreshBtn.Text = "Refreshed!"
-        	task.delay(0.5, function() refreshBtn.Text = "Refresh ESP (Update Players)" end)
-    	end)
-	    y = y + 34
-    	uiRefs.showNameToggle = mkToggle(inner, "Show Name", ESPSettings.ShowName, UDim2.new(1,-24,0,28), UDim2.new(0,12,0,y), function(state)
-	        ESPSettings.ShowName = state; saveAimAuto()
-	    end)
-	    y = y + 34
-	    uiRefs.showUsernameToggle = mkToggle(inner, "Show Username", ESPSettings.ShowUsername, UDim2.new(1,-24,0,28), UDim2.new(0,12,0,y), function(state)
-        	ESPSettings.ShowUsername = state; saveAimAuto()
-    	end)
-    	y = y + 34
-    	uiRefs.showHPToggle = mkToggle(inner, "Show HP", ESPSettings.ShowHP, UDim2.new(1,-24,0,28), UDim2.new(0,12,0,y), function(state)
-	        ESPSettings.ShowHP = state; saveAimAuto()
-	    end)
-	    y = y + 34
-	    uiRefs.showDistanceToggle = mkToggle(inner, "Show Distance", ESPSettings.ShowDistance, UDim2.new(1,-24,0,28), UDim2.new(0,12,0,y), function(state)
-        	ESPSettings.ShowDistance = state; saveAimAuto()
-    	end)
-    	y = y + 34
-    	mkLabel(inner, "ESP Color (RGB):", UDim2.new(1,-24,0,18), UDim2.new(0,12,0,y), F_S, 14)
-    	y = y + 20
-    	uiRefs.colorPreview = Instance.new("Frame", inner)
-    	uiRefs.colorPreview.Position = UDim2.new(0,12,0,y)
-    	uiRefs.colorPreview.Size = UDim2.new(1,-24,0,20)
-    	uiRefs.colorPreview.BackgroundColor3 = ESPSettings.Color
-    	uiRefs.colorPreview.BorderSizePixel = 1
-	    uiRefs.colorPreview.BorderColor3 = Color3.fromRGB(255,255,255)
-	    corner(uiRefs.colorPreview)
-	    y = y + 26
-	    uiRefs.colorBox = mkBox(inner, string.format("%d,%d,%d", math.floor(ESPSettings.Color.R*255), math.floor(ESPSettings.Color.G*255), math.floor(ESPSettings.Color.B*255)), UDim2.new(1,-24,0,24), UDim2.new(0,12,0,y), 13)
-	    uiRefs.colorBox.FocusLost:Connect(function(enter)
-        	if enter then
-	            local r, g, b = uiRefs.colorBox.Text:match("(%d+)%s*,%s*(%d+)%s*,%s*(%d+)")
-            	if r and g and b then
-	                ESPSettings.Color = Color3.fromRGB(math.clamp(tonumber(r),0,255), math.clamp(tonumber(g),0,255), math.clamp(tonumber(b),0,255))
-                	uiRefs.colorPreview.BackgroundColor3 = ESPSettings.Color
-                	if fovCircle then fovCircle.Color = ESPSettings.Color end
-                	saveAimAuto()
-            	end
-        	end
-    	end)
-	end
+            task.delay(0.5, function()
+                refreshBtn.Text = "Refresh ESP (Update Players)"
+            end)
+        end)
+        y = y + 34
 
-    --// TAB 3: KEYBINDS
-	local function buildKeybindsTab(parent)
-		local sf = create("ScrollingFrame", {
-			Parent = parent,
-			Size = UDim2.new(1, 0, 1, 0),
-			BackgroundTransparency = 1,
-			BorderSizePixel = 0,
-			ScrollBarThickness = 4,
-			CanvasSize = UDim2.new(0, 0, 0, 220)
-		})
-		local inner = mkPanel(sf, UDim2.new(1, 0, 0, 220))
-		local y = 10
+        mkToggleRow(inner, "Show Name", y, function()
+            return ESPSettings.ShowName
+        end, function(v)
+            ESPSettings.ShowName = v
+        end)
+        y = y + 34
 
-		local function keyName(k)
-			return tostring(k):gsub("Enum.KeyCode.", ""):gsub("Enum.UserInputType.", "")
-		end
+        mkToggleRow(inner, "Show Username", y, function()
+            return ESPSettings.ShowUsername
+        end, function(v)
+            ESPSettings.ShowUsername = v
+        end)
+        y = y + 34
 
-		local function addBindRow(name, currentKey, yOffset, callback)
-			local btn = mkBtn(inner, name .. ": [" .. keyName(currentKey) .. "]", UDim2.new(1, -24, 0, 28), UDim2.new(0, 12, 0, yOffset), F_B, 13)
-			local waiting = false
+        mkToggleRow(inner, "Show HP", y, function()
+            return ESPSettings.ShowHP
+        end, function(v)
+            ESPSettings.ShowHP = v
+        end)
+        y = y + 34
 
-			btn.MouseButton1Click:Connect(function()
-				if waiting then return end
-				waiting = true
-				local origText = btn.Text
-				btn.Text = name .. ": [PRESS ANY KEY]"
-				btn.TextColor3 = Color3.fromRGB(255, 255, 0)
+        mkToggleRow(inner, "Show Distance", y, function()
+            return ESPSettings.ShowDistance
+        end, function(v)
+            ESPSettings.ShowDistance = v
+        end)
+        y = y + 38
 
-				local conn
-				conn = UserInputService.InputBegan:Connect(function(input, gpe)
-					if gpe then return end
-					if not waiting then return end
-					if input.KeyCode == Enum.KeyCode.Unknown and input.UserInputType == Enum.UserInputType.None then return end
+        mkLabel(inner, "ESP Color (RGB):", UDim2.new(1, -24, 0, 18), UDim2.new(0, 12, 0, y), F_S, 14)
+        y = y + 22
 
-					local newKey = input.KeyCode ~= Enum.KeyCode.Unknown and input.KeyCode or input.UserInputType
-					callback(newKey)
-					saveAimAuto()
-					btn.Text = name .. ": [" .. keyName(newKey) .. "]"
-					btn.TextColor3 = uiColor_TextColor
-					waiting = false
-					conn:Disconnect()
-				end)
+        local preview = Instance.new("Frame", inner)
+        preview.Position = UDim2.new(0, 12, 0, y)
+        preview.Size = UDim2.new(1, -24, 0, 20)
+        preview.BackgroundColor3 = ESPSettings.Color
+        preview.BorderSizePixel = 1
+        preview.BorderColor3 = Color3.fromRGB(255, 255, 255)
+        corner(preview)
+        y = y + 26
 
-				task.delay(5, function()
-					if waiting then
-						btn.Text = origText
-						btn.TextColor3 = uiColor_TextColor
-						waiting = false
-						if conn then conn:Disconnect() end
-					end
-				end)
-			end)
+        local colorBox = mkBox(
+            inner,
+            string.format(
+                "%d,%d,%d",
+                math.floor(ESPSettings.Color.R * 255),
+                math.floor(ESPSettings.Color.G * 255),
+                math.floor(ESPSettings.Color.B * 255)
+            ),
+            UDim2.new(1, -24, 0, 24),
+            UDim2.new(0, 12, 0, y),
+            13
+        )
 
-			return {
-				Button = btn,
-				Set = function(k)
-					btn.Text = name .. ": [" .. keyName(k) .. "]"
-				end
-			}
-		end
+        local function refreshColor()
+            preview.BackgroundColor3 = ESPSettings.Color
+            colorBox.Text = string.format(
+                "%d,%d,%d",
+                math.floor(ESPSettings.Color.R * 255 + 0.5),
+                math.floor(ESPSettings.Color.G * 255 + 0.5),
+                math.floor(ESPSettings.Color.B * 255 + 0.5)
+            )
+            if fovCircle then
+                fovCircle.Color = ESPSettings.Color
+            end
+        end
 
-		uiRefs.bindAimKey      = addBindRow("Aimbot Key",    AimSettings.Keybind,        y, function(key) AimSettings.Keybind = key end)
-		y = y + 34
-		uiRefs.bindToggleAimbot = addBindRow("Toggle Aimbot", AimKeybinds.ToggleAimbot,  y, function(key) AimKeybinds.ToggleAimbot = key end)
-		y = y + 34
-		uiRefs.bindToggleESP    = addBindRow("Toggle ESP",    AimKeybinds.ToggleESP,     y, function(key) AimKeybinds.ToggleESP = key end)
-		y = y + 34
-		uiRefs.bindToggleMenu   = addBindRow("Toggle Menu",   AimKeybinds.ToggleMenu,    y, function(key) AimKeybinds.ToggleMenu = key end)
-	end
+        colorBox.FocusLost:Connect(function(enterPressed)
+            if enterPressed then
+                local r, g, b = colorBox.Text:match("(%d+)%s*,%s*(%d+)%s*,%s*(%d+)")
+                if r and g and b then
+                    ESPSettings.Color = Color3.fromRGB(
+                        math.clamp(tonumber(r), 0, 255),
+                        math.clamp(tonumber(g), 0, 255),
+                        math.clamp(tonumber(b), 0, 255)
+                    )
+                    saveAimAuto()
+                end
+            end
 
-    --// Register Tabs
-    addAimTab("Aim", buildAimTab)
+            refreshColor()
+        end)
+
+        addRefresh(refreshColor)
+        refreshColor()
+    end
+
+    ------------------------------------------------------------
+    -- TAB: KEYBINDS
+    ------------------------------------------------------------
+
+    local function buildKeybindsTab(parent)
+        local scroll = create("ScrollingFrame", {
+            Parent = parent,
+            Size = UDim2.new(1, 0, 1, 0),
+            BackgroundTransparency = 1,
+            BorderSizePixel = 0,
+            ScrollBarThickness = 4,
+            CanvasSize = UDim2.new(0, 0, 0, 300),
+        })
+
+        local inner = mkPanel(scroll, UDim2.new(1, 0, 0, 300))
+        local y = 10
+
+        mkLabel(inner, "LegitBot / Ragebot keybinds", UDim2.new(1, -24, 0, 20), UDim2.new(0, 12, 0, y), F_S, 14)
+        y = y + 26
+
+        mkBindRow(inner, "Toggle LegitBot", y, function()
+            return Keybinds.ToggleLegitBot
+        end, function(v)
+            Keybinds.ToggleLegitBot = v
+        end)
+        y = y + 34
+
+        mkBindRow(inner, "Legit Aim Key", y, function()
+            return Legit.Keybind
+        end, function(v)
+            Legit.Keybind = v
+        end)
+        y = y + 34
+
+        mkBindRow(inner, "Legit Trigger Key", y, function()
+            return Legit.TriggerKey
+        end, function(v)
+            Legit.TriggerKey = v
+        end)
+        y = y + 34
+
+        mkBindRow(inner, "Toggle Ragebot", y, function()
+            return Keybinds.ToggleRagebot
+        end, function(v)
+            Keybinds.ToggleRagebot = v
+        end)
+        y = y + 34
+
+        mkBindRow(inner, "Rage Aim Key", y, function()
+            return Rage.Keybind
+        end, function(v)
+            Rage.Keybind = v
+        end)
+    end
+
+    addAimTab("LegitBot", buildLegitTab)
+    addAimTab("Ragebot", buildRageTab)
     addAimTab("ESP", buildESPTab)
     addAimTab("Keybinds", buildKeybindsTab)
 
-    local AimSidebarToggle = create("TextButton", {
-		Name = "MToggle_Aim", Parent = MenuInsided,
-		Size = UDim2.new(1, 0, 0, 40), LayoutOrder = 390, Visible = false,
-		BorderColor3 = COL_BORDER, Text = "Aim: OFF", Font = FONT, TextSize = 12, TextWrapped = true,
-		BackgroundTransparency = 1 - uiGuiOpacity,
-	})
-	table.insert(themeElements.CustomButtons, AimSidebarToggle)
-	table.insert(moduleToggles, {btn = AimSidebarToggle, group = "Aim"})
-	registerToggle(AimSidebarToggle, function() return AimSettings.Enabled end)
-	local function refreshAimToggleText()
-		AimSidebarToggle.Text = "Aim: " .. (AimSettings.Enabled and "ON" or "OFF")
-		paintToggleBtn(AimSidebarToggle, AimSettings.Enabled)
-	end
-	refreshAimToggleText()
-	AimSidebarToggle.MouseButton1Click:Connect(function()
-		AimSettings.Enabled = not AimSettings.Enabled
-		if AimSettings.Enabled then
-			startAimbotLoop()
-			startKeybindListener()
-		else
-			stopAimbotLoop()
-		end
-		saveAimAuto()
-		refreshAimToggleText()
-	end)
+    ------------------------------------------------------------
+    -- SIDEBAR TOGGLES
+    ------------------------------------------------------------
 
-    local ESPSidebarToggle = create("TextButton", {
-	    Name = "MToggle_ESP", Parent = MenuInsided,
-	    Size = UDim2.new(1, 0, 0, 40), LayoutOrder = 391, Visible = false,
-	    BorderColor3 = COL_BORDER, Text = "ESP: OFF", Font = FONT, TextSize = 12, TextWrapped = true,
-	    BackgroundTransparency = 1 - uiGuiOpacity,
+    local LegitSidebarToggle = create("TextButton", {
+        Name = "MToggle_Legit",
+        Parent = MenuInsided,
+        Size = UDim2.new(1, 0, 0, 40),
+        LayoutOrder = 390,
+        Visible = false,
+        BackgroundColor3 = uiColor_ButtonColor,
+        BorderColor3 = COL_BORDER,
+        Text = "Legit: OFF",
+        Font = FONT,
+        TextSize = 12,
+        TextWrapped = true,
+        BackgroundTransparency = 1 - uiGuiOpacity,
     })
-    table.insert(themeElements.CustomButtons, ESPSidebarToggle)
-    table.insert(moduleToggles, {btn = ESPSidebarToggle, group = "Aim"})
-    registerToggle(ESPSidebarToggle, function() return ESPSettings.Enabled end)
-    refreshESPToggleText = function()
-    	ESPSidebarToggle.Text = "ESP: " .. (ESPSettings.Enabled and "ON" or "OFF")
-    	paintToggleBtn(ESPSidebarToggle, ESPSettings.Enabled)
-    end
-    refreshESPToggleText()
-    ESPSidebarToggle.MouseButton1Click:Connect(function()
-    	setESPEnabled(not ESPSettings.Enabled)
+
+    table.insert(themeElements.CustomButtons, LegitSidebarToggle)
+    table.insert(moduleToggles, {btn = LegitSidebarToggle, group = "Aim"})
+    registerToggle(LegitSidebarToggle, function()
+        return Legit.Enabled
     end)
 
-	--// ===== SAVE / LOAD / RESET AIM SETTINGS =====
-	local function refreshAimUI()
-	    refreshAimToggleText()
-	    if uiRefs.modeDD then uiRefs.modeDD.Set(AimSettings.Mode) end
-	    if uiRefs.aimPartDD then uiRefs.aimPartDD.Set(AimSettings.AimPart) end
-	    if uiRefs.stickToggle then uiRefs.stickToggle.Set(AimSettings.StickToTarget) end
-	    if uiRefs.wallToggle then uiRefs.wallToggle.Set(AimSettings.WallCheck) end
-	    if uiRefs.autoFireToggle then uiRefs.autoFireToggle.Set(AimSettings.AutoFire) end
-	    if uiRefs.drawFovToggle then uiRefs.drawFovToggle.Set(AimSettings.DrawFOV) end
-	    if uiRefs.fovLabel then uiRefs.fovLabel.Text = "FOV Radius: " .. tostring(AimSettings.FOV) end
-	    if uiRefs.fovBox then uiRefs.fovBox.Text = tostring(AimSettings.FOV) end
-	    if uiRefs.smoothLabel then uiRefs.smoothLabel.Text = "Smoothness: " .. tostring(AimSettings.Smoothness) end
-	    if uiRefs.smoothBox then uiRefs.smoothBox.Text = tostring(AimSettings.Smoothness) end
-	    if uiRefs.espToggle then uiRefs.espToggle.Set(ESPSettings.Enabled) end
-        if refreshESPToggleText then refreshESPToggleText() end
-	    if uiRefs.enableESPToggle then uiRefs.enableESPToggle.Set(ESPSettings.Enabled) end
-	    if uiRefs.showNameToggle then uiRefs.showNameToggle.Set(ESPSettings.ShowName) end
-	    if uiRefs.showUsernameToggle then uiRefs.showUsernameToggle.Set(ESPSettings.ShowUsername) end
-	    if uiRefs.showHPToggle then uiRefs.showHPToggle.Set(ESPSettings.ShowHP) end
-	    if uiRefs.showDistanceToggle then uiRefs.showDistanceToggle.Set(ESPSettings.ShowDistance) end
-	    if uiRefs.colorPreview then uiRefs.colorPreview.BackgroundColor3 = ESPSettings.Color end
-	    if uiRefs.colorBox then
-    	    uiRefs.colorBox.Text = string.format("%d,%d,%d",
-            	math.floor(ESPSettings.Color.R*255+0.5), math.floor(ESPSettings.Color.G*255+0.5), math.floor(ESPSettings.Color.B*255+0.5))
-    	end
-    	if uiRefs.bindAimKey then uiRefs.bindAimKey.Set(AimSettings.Keybind) end
-    	if uiRefs.bindToggleAimbot then uiRefs.bindToggleAimbot.Set(AimKeybinds.ToggleAimbot) end
-    	if uiRefs.bindToggleESP then uiRefs.bindToggleESP.Set(AimKeybinds.ToggleESP) end
-    	if uiRefs.bindToggleMenu then uiRefs.bindToggleMenu.Set(AimKeybinds.ToggleMenu) end
-	end
-	local function applyAimConfig(data)
-	    if type(data) ~= "table" then return end
-    	local a = data.Aimbot
-    	if type(a) == "table" then
-	        if a.Enabled ~= nil then AimSettings.Enabled = a.Enabled and true or false end
-        	if a.Mode == "Hold" or a.Mode == "Toggle" or a.Mode == "Always" then AimSettings.Mode = a.Mode end
-        	if a.AimPart == "Head" or a.AimPart == "RootPart" or a.AimPart == "All" then AimSettings.AimPart = a.AimPart end
-        	if a.StickToTarget ~= nil then AimSettings.StickToTarget = a.StickToTarget and true or false end
-        	if a.WallCheck ~= nil then AimSettings.WallCheck = a.WallCheck and true or false end
-        	if a.AutoFire ~= nil then AimSettings.AutoFire = a.AutoFire and true or false end
-        	if a.DrawFOV ~= nil then AimSettings.DrawFOV = a.DrawFOV and true or false end
-        	if type(a.FOV) == "number" then AimSettings.FOV = math.clamp(a.FOV, 10, 500) end
-        	if type(a.Smoothness) == "number" then AimSettings.Smoothness = math.clamp(a.Smoothness, 0.1, 1) end
-        	if type(a.Sensitivity) == "number" then AimSettings.Sensitivity = math.clamp(a.Sensitivity, 0.05, 1) end
-        	local kb = getEnumByName(a.Keybind) if kb then AimSettings.Keybind = kb end
-    	end
-    	local e = data.ESP
-    	if type(e) == "table" then
-	        if e.Enabled ~= nil then ESPSettings.Enabled = e.Enabled and true or false end
-        	if type(e.Color) == "table" and e.Color[1] and e.Color[2] and e.Color[3] then
-	            ESPSettings.Color = Color3.fromRGB(
-                	math.clamp(tonumber(e.Color[1]) or 0, 0, 255),
-                	math.clamp(tonumber(e.Color[2]) or 0, 0, 255),
-                	math.clamp(tonumber(e.Color[3]) or 0, 0, 255))
-        	end
-        	if e.ShowName ~= nil then ESPSettings.ShowName = e.ShowName and true or false end
-        	if e.ShowUsername ~= nil then ESPSettings.ShowUsername = e.ShowUsername and true or false end
-        	if e.ShowHP ~= nil then ESPSettings.ShowHP = e.ShowHP and true or false end
-        	if e.ShowDistance ~= nil then ESPSettings.ShowDistance = e.ShowDistance and true or false end
-    	end
-    	local k = data.Keybinds
-    	if type(k) == "table" then
-	        local v1 = getEnumByName(k.ToggleAimbot) if v1 then AimKeybinds.ToggleAimbot = v1 end
-        	local v2 = getEnumByName(k.ToggleESP) if v2 then AimKeybinds.ToggleESP = v2 end
-        	local v3 = getEnumByName(k.ToggleMenu) if v3 then AimKeybinds.ToggleMenu = v3 end
-    	end
-    	if AimSettings.Enabled then startAimbotLoop(); startKeybindListener() else stopAimbotLoop() end
-	    if fovCircle then
-        	fovCircle.Color = ESPSettings.Color
-        	fovCircle.Visible = AimSettings.DrawFOV and AimSettings.Enabled
-    	end	
-    	setESPEnabled(ESPSettings.Enabled)
-    	refreshAimUI()
-    	saveAimAuto()
-	end
-	local function resetAimDefaults()
-        stopAimbotLoop(); stopESPLoop(); cleanESP()
-    	AimSettings.Enabled = false; AimSettings.Mode = "Hold"; AimSettings.AimPart = "All"
-    	AimSettings.StickToTarget = false; AimSettings.WallCheck = false; AimSettings.AutoFire = false
-    	AimSettings.DrawFOV = true; AimSettings.FOV = 150; AimSettings.Smoothness = 0.2
-    	AimSettings.Sensitivity = 0.45; AimSettings.ActiveToggle = false
-    	AimSettings.Keybind = Enum.UserInputType.MouseButton2
-    	ESPSettings.Enabled = false; ESPSettings.Color = Color3.fromRGB(0, 255, 150)
-    	ESPSettings.ShowName = true; ESPSettings.ShowUsername = true
-    	ESPSettings.ShowHP = true; ESPSettings.ShowDistance = true
-    	AimKeybinds.ToggleAimbot = Enum.KeyCode.G; AimKeybinds.ToggleESP = Enum.KeyCode.H
-    	AimKeybinds.ToggleMenu = Enum.KeyCode.RightShift
-    	if fovCircle then fovCircle.Color = ESPSettings.Color; fovCircle.Visible = false end
-    	refreshAimUI()
-    	saveAimAuto()
-	end
-	--// Авто-восстановление сохранённых настроек при запуске
-	if readfile and isfile and isfile(AIM_AUTO_FILE) then
-	    local ok, json = pcall(function() return readfile(AIM_AUTO_FILE) end)
-	    if ok and json then
-        	local ok2, data = pcall(function() return HttpService:JSONDecode(json) end)
-        	if ok2 and type(data) == "table" then applyAimConfig(data) end
-    	end
-	end
+    local RageSidebarToggle = create("TextButton", {
+        Name = "MToggle_Rage",
+        Parent = MenuInsided,
+        Size = UDim2.new(1, 0, 0, 40),
+        LayoutOrder = 391,
+        Visible = false,
+        BackgroundColor3 = uiColor_ButtonColor,
+        BorderColor3 = COL_BORDER,
+        Text = "Rage: OFF",
+        Font = FONT,
+        TextSize = 12,
+        TextWrapped = true,
+        BackgroundTransparency = 1 - uiGuiOpacity,
+    })
 
-    --// Theme update
+    table.insert(themeElements.CustomButtons, RageSidebarToggle)
+    table.insert(moduleToggles, {btn = RageSidebarToggle, group = "Aim"})
+    registerToggle(RageSidebarToggle, function()
+        return Rage.Enabled
+    end)
+
+    local ESPSidebarToggle = create("TextButton", {
+        Name = "MToggle_ESP",
+        Parent = MenuInsided,
+        Size = UDim2.new(1, 0, 0, 40),
+        LayoutOrder = 392,
+        Visible = false,
+        BackgroundColor3 = uiColor_ButtonColor,
+        BorderColor3 = COL_BORDER,
+        Text = "ESP: OFF",
+        Font = FONT,
+        TextSize = 12,
+        TextWrapped = true,
+        BackgroundTransparency = 1 - uiGuiOpacity,
+    })
+
+    table.insert(themeElements.CustomButtons, ESPSidebarToggle)
+    table.insert(moduleToggles, {btn = ESPSidebarToggle, group = "Aim"})
+    registerToggle(ESPSidebarToggle, function()
+        return ESPSettings.Enabled
+    end)
+
+    LegitSidebarToggle.MouseButton1Click:Connect(function()
+        setLegitEnabled(not Legit.Enabled)
+    end)
+
+    RageSidebarToggle.MouseButton1Click:Connect(function()
+        setRageEnabled(not Rage.Enabled)
+    end)
+
+    ESPSidebarToggle.MouseButton1Click:Connect(function()
+        setESPEnabled(not ESPSettings.Enabled)
+    end)
+
+    refreshSidebarTexts = function()
+        if LegitSidebarToggle then
+            LegitSidebarToggle.Text = "Legit: " .. (Legit.Enabled and "ON" or "OFF")
+            paintToggleBtn(LegitSidebarToggle, Legit.Enabled)
+        end
+
+        if RageSidebarToggle then
+            RageSidebarToggle.Text = "Rage: " .. (Rage.Enabled and "ON" or "OFF")
+            paintToggleBtn(RageSidebarToggle, Rage.Enabled)
+        end
+
+        if ESPSidebarToggle then
+            ESPSidebarToggle.Text = "ESP: " .. (ESPSettings.Enabled and "ON" or "OFF")
+            paintToggleBtn(ESPSidebarToggle, ESPSettings.Enabled)
+        end
+    end
+
+    refreshAimUI = function()
+        for _, fn in ipairs(uiRefreshers) do
+            pcall(fn)
+        end
+
+        if refreshSidebarTexts then
+            refreshSidebarTexts()
+        end
+
+        if fovCircle then
+            fovCircle.Color = ESPSettings.Color
+        end
+    end
+
+    ------------------------------------------------------------
+    -- APPLY / RESET CONFIG
+    ------------------------------------------------------------
+
+    local function applyLegitData(data)
+        if type(data) ~= "table" then return end
+
+        if data.Enabled ~= nil then
+            Legit.Enabled = data.Enabled and true or false
+        end
+
+        if data.Mode == "Hold" or data.Mode == "Toggle" or data.Mode == "Always" then
+            Legit.Mode = data.Mode
+        end
+
+        if data.AimPart == "All" or data.AimPart == "Head" or data.AimPart == "RootPart" then
+            Legit.AimPart = data.AimPart
+        end
+
+        if data.StickToTarget ~= nil then
+            Legit.StickToTarget = data.StickToTarget and true or false
+        end
+
+        if data.WallCheck ~= nil then
+            Legit.WallCheck = data.WallCheck and true or false
+        end
+
+        if data.DrawFOV ~= nil then
+            Legit.DrawFOV = data.DrawFOV and true or false
+        end
+
+        if type(data.FOV) == "number" then
+            Legit.FOV = math.clamp(data.FOV, 10, 1000)
+        end
+
+        if type(data.Smoothness) == "number" then
+            Legit.Smoothness = math.clamp(data.Smoothness, 0, 1)
+        end
+
+        if type(data.Sensitivity) == "number" then
+            Legit.Sensitivity = math.clamp(data.Sensitivity, 0.05, 2)
+        end
+
+        if data.TriggerMode == "Hold" or data.TriggerMode == "Toggle" or data.TriggerMode == "Always" then
+            Legit.TriggerMode = data.TriggerMode
+        end
+
+        if data.TriggerPart == "All" or data.TriggerPart == "Head" or data.TriggerPart == "RootPart" then
+            Legit.TriggerPart = data.TriggerPart
+        end
+
+        if type(data.TriggerTime) == "number" then
+            Legit.TriggerTime = math.clamp(data.TriggerTime, 0, 1)
+        end
+
+        if data.Keybind ~= nil then
+            Legit.Keybind = getEnumByName(data.Keybind)
+        end
+
+        if data.TriggerKey ~= nil then
+            Legit.TriggerKey = getEnumByName(data.TriggerKey)
+        end
+    end
+
+    local function applyRageData(data)
+        if type(data) ~= "table" then return end
+
+        if data.Enabled ~= nil then
+            Rage.Enabled = data.Enabled and true or false
+        end
+
+        if data.Mode == "Always" or data.Mode == "Hold" or data.Mode == "Toggle" then
+            Rage.Mode = data.Mode
+        end
+
+        if data.AimPart == "All" or data.AimPart == "Head" or data.AimPart == "RootPart" then
+            Rage.AimPart = data.AimPart
+        end
+
+        if data.Priority == "Closest" or data.Priority == "Angle" or data.Priority == "Health" then
+            Rage.Priority = data.Priority
+        end
+
+        if type(data.FOV) == "number" then
+            Rage.FOV = math.clamp(data.FOV, 0, 360)
+        end
+
+        if data.WallCheck ~= nil then
+            Rage.WallCheck = data.WallCheck and true or false
+        end
+
+        if data.AutoFire ~= nil then
+            Rage.AutoFire = data.AutoFire and true or false
+        end
+
+        if type(data.FireDelay) == "number" then
+            Rage.FireDelay = math.clamp(data.FireDelay, 0, 1)
+        end
+
+        if type(data.FireAngle) == "number" then
+            Rage.FireAngle = math.clamp(data.FireAngle, 0, 45)
+        end
+
+        if type(data.Smoothness) == "number" then
+            Rage.Smoothness = math.clamp(data.Smoothness, 0, 0.95)
+        end
+
+        if type(data.Prediction) == "number" then
+            Rage.Prediction = math.clamp(data.Prediction, 0, 1)
+        end
+
+        if type(data.MaxDistance) == "number" then
+            Rage.MaxDistance = math.clamp(data.MaxDistance, 0, 100000)
+        end
+
+        if data.Keybind ~= nil then
+            Rage.Keybind = getEnumByName(data.Keybind)
+        end
+    end
+
+    local function applyESPData(data)
+        if type(data) ~= "table" then return end
+
+        if data.Enabled ~= nil then
+            ESPSettings.Enabled = data.Enabled and true or false
+        end
+
+        if type(data.Color) == "table" and data.Color[1] and data.Color[2] and data.Color[3] then
+            ESPSettings.Color = Color3.fromRGB(
+                math.clamp(tonumber(data.Color[1]) or 0, 0, 255),
+                math.clamp(tonumber(data.Color[2]) or 0, 0, 255),
+                math.clamp(tonumber(data.Color[3]) or 0, 0, 255)
+            )
+        end
+
+        if data.ShowName ~= nil then
+            ESPSettings.ShowName = data.ShowName and true or false
+        end
+
+        if data.ShowUsername ~= nil then
+            ESPSettings.ShowUsername = data.ShowUsername and true or false
+        end
+
+        if data.ShowHP ~= nil then
+            ESPSettings.ShowHP = data.ShowHP and true or false
+        end
+
+        if data.ShowDistance ~= nil then
+            ESPSettings.ShowDistance = data.ShowDistance and true or false
+        end
+    end
+
+    local function applyAimConfig(data)
+        if type(data) ~= "table" then return end
+
+        if data.Legit then
+            applyLegitData(data.Legit)
+        elseif data.Aimbot then
+            -- Совместимость со старым конфигом
+            applyLegitData(data.Aimbot)
+        end
+
+        if data.Rage then
+            applyRageData(data.Rage)
+        end
+
+        if data.ESP then
+            applyESPData(data.ESP)
+        end
+
+        if type(data.Keybinds) == "table" then
+            if data.Keybinds.ToggleLegitBot ~= nil or data.Keybinds.ToggleAimbot ~= nil then
+                Keybinds.ToggleLegitBot = getEnumByName(data.Keybinds.ToggleLegitBot or data.Keybinds.ToggleAimbot)
+            end
+
+            if data.Keybinds.ToggleRagebot ~= nil then
+                Keybinds.ToggleRagebot = getEnumByName(data.Keybinds.ToggleRagebot)
+            end
+        end
+
+        -- Взаимная эксклюзивность
+        if Legit.Enabled and Rage.Enabled then
+            Legit.Enabled = false
+        end
+
+        setESPEnabled(ESPSettings.Enabled)
+
+        if refreshAimUI then
+            refreshAimUI()
+        end
+
+        saveAimAuto()
+    end
+
+    local function resetAimDefaults()
+        Legit.Enabled = false
+        Legit.Mode = "Hold"
+        Legit.AimPart = "All"
+        Legit.StickToTarget = false
+        Legit.WallCheck = false
+        Legit.DrawFOV = true
+        Legit.FOV = 150
+        Legit.Smoothness = 0.20
+        Legit.Sensitivity = 0.45
+        Legit.ActiveToggle = false
+
+        Legit.TriggerMode = "Hold"
+        Legit.TriggerTime = 0.08
+        Legit.TriggerPart = "All"
+        Legit.TriggerActiveToggle = false
+
+        Legit.Keybind = Enum.UserInputType.MouseButton2
+        Legit.TriggerKey = Enum.KeyCode.LeftAlt
+
+        Rage.Enabled = false
+        Rage.Mode = "Always"
+        Rage.AimPart = "Head"
+        Rage.Priority = "Closest"
+        Rage.FOV = 360
+        Rage.WallCheck = true
+        Rage.AutoFire = true
+        Rage.FireDelay = 0.05
+        Rage.FireAngle = 5
+        Rage.Smoothness = 0.10
+        Rage.Prediction = 0.0
+        Rage.MaxDistance = 0
+        Rage.ActiveToggle = false
+        Rage.Keybind = Enum.UserInputType.MouseButton2
+
+        ESPSettings.Enabled = false
+        ESPSettings.Color = Color3.fromRGB(0, 255, 150)
+        ESPSettings.ShowName = true
+        ESPSettings.ShowUsername = true
+        ESPSettings.ShowHP = true
+        ESPSettings.ShowDistance = true
+
+        Keybinds.ToggleLegitBot = Enum.KeyCode.G
+        Keybinds.ToggleRagebot = Enum.KeyCode.H
+
+        cleanESP()
+
+        if fovCircle then
+            fovCircle.Visible = false
+            fovCircle.Color = ESPSettings.Color
+        end
+
+        refreshAimUI()
+        saveAimAuto()
+    end
+
+    ------------------------------------------------------------
+    -- INIT
+    ------------------------------------------------------------
+
+    ensureMainLoop()
+    startKeybindListener()
+
+    if readfile and isfile and isfile(AIM_AUTO_FILE) then
+        local ok, json = pcall(function()
+            return readfile(AIM_AUTO_FILE)
+        end)
+
+        if ok and json then
+            local ok2, data = pcall(function()
+                return HttpService:JSONDecode(json)
+            end)
+
+            if ok2 and type(data) == "table" then
+                applyAimConfig(data)
+            end
+        end
+    end
+
+    refreshAimUI()
+
+    ------------------------------------------------------------
+    -- THEME UPDATE
+    ------------------------------------------------------------
+
     local baseUpdateTabTheme2 = updateTabButtonsTheme
     updateTabButtonsTheme = function()
         baseUpdateTabTheme2()
+
         for _, tab in ipairs(aimTabs) do
             if tab.Button then
                 if tab.Frame.Visible then
                     tab.Button.BackgroundColor3 = uiColor_ButtonColor
                     tab.Button.TextColor3 = Color3.fromRGB(255, 255, 255)
                 else
-                    tab.Button.BackgroundColor3 = Color3.fromRGB(math.max(uiColor_ButtonColor.R*255-10,0), math.max(uiColor_ButtonColor.G*255-10,0), math.max(uiColor_ButtonColor.B*255-10,0))
+                    tab.Button.BackgroundColor3 = Color3.fromRGB(
+                        math.max(uiColor_ButtonColor.R * 255 - 10, 0),
+                        math.max(uiColor_ButtonColor.G * 255 - 10, 0),
+                        math.max(uiColor_ButtonColor.B * 255 - 10, 0)
+                    )
                     tab.Button.TextColor3 = uiColor_TextColor
                 end
             end
         end
     end
 
-    --// Sidebar switching
+    ------------------------------------------------------------
+    -- SIDEBAR SWITCHING
+    ------------------------------------------------------------
+
     task.defer(function()
         local function hideAllFrames()
-            for _, t in ipairs(tabs) do t.Frame.Visible = false end
-            for _, t in ipairs(desyncTabs) do t.Frame.Visible = false end
-            for _, t in ipairs(musicTabs) do t.Frame.Visible = false end
-            for _, t in ipairs(aimTabs) do t.Frame.Visible = false end
+            for _, t in ipairs(tabs or {}) do
+                if t.Frame then t.Frame.Visible = false end
+            end
+
+            for _, t in ipairs(desyncTabs) do
+                if t.Frame then t.Frame.Visible = false end
+            end
+
+            for _, t in ipairs(musicTabs) do
+                if t.Frame then t.Frame.Visible = false end
+            end
+
+            for _, t in ipairs(aimTabs) do
+                if t.Frame then t.Frame.Visible = false end
+            end
+        end
+
+        local function hideAllModuleButtons()
+            for _, t in ipairs(tabs or {}) do
+                if t.Button then t.Button.Visible = false end
+            end
+
+            for _, t in ipairs(desyncTabs) do
+                if t.Button then t.Button.Visible = false end
+            end
+
+            for _, t in ipairs(musicTabs) do
+                if t.Button then t.Button.Visible = false end
+            end
+
+            for _, t in ipairs(aimTabs) do
+                if t.Button then t.Button.Visible = false end
+            end
         end
 
         local function showMainButtons()
-            for _, t in ipairs(tabs) do if t.Button then t.Button.Visible = true end end
-            for _, t in ipairs(desyncTabs) do t.Button.Visible = false end
-            for _, t in ipairs(musicTabs) do t.Button.Visible = false end
-            for _, t in ipairs(aimTabs) do t.Button.Visible = false end
+            hideAllModuleButtons()
+
+            for _, t in ipairs(tabs or {}) do
+                if t.Button then t.Button.Visible = true end
+            end
         end
 
         local function showDesyncButtons()
-            for _, t in ipairs(tabs) do if t.Button then t.Button.Visible = false end end
-            for _, t in ipairs(desyncTabs) do t.Button.Visible = true end
-            for _, t in ipairs(musicTabs) do t.Button.Visible = false end
-            for _, t in ipairs(aimTabs) do t.Button.Visible = false end
+            hideAllModuleButtons()
+
+            for _, t in ipairs(desyncTabs) do
+                if t.Button then t.Button.Visible = true end
+            end
         end
 
         local function showMusicButtons()
-            for _, t in ipairs(tabs) do if t.Button then t.Button.Visible = false end end
-            for _, t in ipairs(desyncTabs) do t.Button.Visible = false end
-            for _, t in ipairs(musicTabs) do t.Button.Visible = true end
-            for _, t in ipairs(aimTabs) do t.Button.Visible = false end
+            hideAllModuleButtons()
+
+            for _, t in ipairs(musicTabs) do
+                if t.Button then t.Button.Visible = true end
+            end
         end
 
         local function showAimButtons()
-            for _, t in ipairs(tabs) do if t.Button then t.Button.Visible = false end end
-            for _, t in ipairs(desyncTabs) do t.Button.Visible = false end
-            for _, t in ipairs(musicTabs) do t.Button.Visible = false end
-            for _, t in ipairs(aimTabs) do t.Button.Visible = true end
+            hideAllModuleButtons()
+
+            for _, t in ipairs(aimTabs) do
+                if t.Button then t.Button.Visible = true end
+            end
         end
 
         for _, t in ipairs(aimTabs) do
-            t.Button.MouseButton1Click:Connect(function()
-                hideAllFrames()
-                t.Frame.Visible = true
-                updateTabButtonsTheme()
-            end)
-        end
-
-        for _, t in ipairs(tabs) do
             if t.Button then
                 t.Button.MouseButton1Click:Connect(function()
-                    for _, m in ipairs(musicTabs) do m.Frame.Visible = false end
-                    for _, d in ipairs(desyncTabs) do d.Frame.Visible = false end
-                    for _, a in ipairs(aimTabs) do a.Frame.Visible = false end
+                    hideAllFrames()
+                    t.Frame.Visible = true
+                    updateTabButtonsTheme()
+                end)
+            end
+        end
+
+        for _, t in ipairs(tabs or {}) do
+            if t.Button then
+                t.Button.MouseButton1Click:Connect(function()
+                    for _, m in ipairs(musicTabs) do
+                        if m.Frame then m.Frame.Visible = false end
+                    end
+
+                    for _, d in ipairs(desyncTabs) do
+                        if d.Frame then d.Frame.Visible = false end
+                    end
+
+                    for _, a in ipairs(aimTabs) do
+                        if a.Frame then a.Frame.Visible = false end
+                    end
+
                     updateTabButtonsTheme()
                 end)
             end
         end
 
         for _, t in ipairs(desyncTabs) do
-            t.Button.MouseButton1Click:Connect(function()
-                for _, m in ipairs(musicTabs) do m.Frame.Visible = false end
-                for _, a in ipairs(aimTabs) do a.Frame.Visible = false end
-                updateTabButtonsTheme()
-            end)
+            if t.Button then
+                t.Button.MouseButton1Click:Connect(function()
+                    for _, m in ipairs(musicTabs) do
+                        if m.Frame then m.Frame.Visible = false end
+                    end
+
+                    for _, a in ipairs(aimTabs) do
+                        if a.Frame then a.Frame.Visible = false end
+                    end
+
+                    updateTabButtonsTheme()
+                end)
+            end
         end
 
         for _, t in ipairs(musicTabs) do
-            t.Button.MouseButton1Click:Connect(function()
-                for _, a in ipairs(aimTabs) do a.Frame.Visible = false end
-                for _, d in ipairs(desyncTabs) do d.Frame.Visible = false end
-                updateTabButtonsTheme()
-            end)
+            if t.Button then
+                t.Button.MouseButton1Click:Connect(function()
+                    for _, a in ipairs(aimTabs) do
+                        if a.Frame then a.Frame.Visible = false end
+                    end
+
+                    for _, d in ipairs(desyncTabs) do
+                        if d.Frame then d.Frame.Visible = false end
+                    end
+
+                    updateTabButtonsTheme()
+                end)
+            end
         end
 
         EmilyUi.MouseButton1Click:Connect(function()
-            showMainButtons(); hideAllFrames()
-            if tabs[1] then tabs[1].Frame.Visible = true end
+            showMainButtons()
+            hideAllFrames()
+
+            if tabs and tabs[1] and tabs[1].Frame then
+                tabs[1].Frame.Visible = true
+            end
+
             updateTabButtonsTheme()
         end)
 
         Desync.MouseButton1Click:Connect(function()
-            showDesyncButtons(); hideAllFrames()
-            if desyncTabs[1] then desyncTabs[1].Frame.Visible = true end
+            showDesyncButtons()
+            hideAllFrames()
+
+            if desyncTabs[1] and desyncTabs[1].Frame then
+                desyncTabs[1].Frame.Visible = true
+            end
+
             updateTabButtonsTheme()
         end)
 
         Music.MouseButton1Click:Connect(function()
-            showMusicButtons(); hideAllFrames()
-            if musicTabs[1] then musicTabs[1].Frame.Visible = true end
+            showMusicButtons()
+            hideAllFrames()
+
+            if musicTabs[1] and musicTabs[1].Frame then
+                musicTabs[1].Frame.Visible = true
+            end
+
             updateTabButtonsTheme()
         end)
 
         Aim.MouseButton1Click:Connect(function()
-            showAimButtons(); hideAllFrames()
-            if aimTabs[1] then aimTabs[1].Frame.Visible = true end
+            showAimButtons()
+            hideAllFrames()
+
+            if aimTabs[1] and aimTabs[1].Frame then
+                aimTabs[1].Frame.Visible = true
+            end
+
             updateTabButtonsTheme()
         end)
     end)
 
-    return { Tabs = aimTabs, Gather = gatherAimConfig, Apply = applyAimConfig, Reset = resetAimDefaults }
-end
-AimAPI = initAimbotModule(desyncTabs, musicTabs)
+    ScreenGui.Destroying:Connect(function()
+        pcall(function()
+            Legit.Enabled = false
+            Rage.Enabled = false
+            ESPSettings.Enabled = false
 
+            Legit.ActiveToggle = false
+            Legit.TriggerActiveToggle = false
+            Rage.ActiveToggle = false
+
+            currentTargetPart = nil
+            triggerTargetPart = nil
+            triggerFirstSeen = 0
+
+            rageTargetPart = nil
+            rageFirstSeen = 0
+
+            if fovCircle then
+                fovCircle.Visible = false
+            end
+
+            cleanESP()
+
+            if refreshSidebarTexts then
+                refreshSidebarTexts()
+            end
+        end)
+    end)
+
+    return {
+        Tabs = aimTabs,
+        Gather = gatherAimConfig,
+        Apply = applyAimConfig,
+        Reset = resetAimDefaults,
+    }
+end
+
+AimAPI = initAimbotModule(desyncTabs, musicTabs)
 -- =========================================================
 -- ========== MOVEMENT RECORDER MODULE =====================
 -- =========================================================
@@ -5932,10 +7191,22 @@ local function initMovementModule(desyncTabs, musicTabs, aimTabs)
     local MovementEnabled = false
 
 	local function keyCodeByName(n)
-		local ok, e = pcall(function() return Enum.KeyCode[n] end)
-		if ok and e then return e end
-		return Enum.KeyCode.E
-	end
+        if not n or n == "" then
+            return Enum.KeyCode.Unknown
+        end
+
+        local ok, e = pcall(function() return Enum.KeyCode[n] end)
+        if ok and e then return e end
+
+        return Enum.KeyCode.Unknown
+    end
+
+    local function movementKeyName(v)
+        if type(v) == "string" and v ~= "" then
+            return v
+        end
+        return "None"
+    end
 
 	local function lighter(c, amt)
 		return Color3.fromRGB(
@@ -6001,8 +7272,12 @@ local function initMovementModule(desyncTabs, musicTabs, aimTabs)
 	end
 
 	local function saveSettings()
-		writeJSON(SETTINGS_PATH, {Settings = Settings, Keybinds = Keybinds})
-	end
+        writeJSON(SETTINGS_PATH, {Settings = Settings, Keybinds = Keybinds})
+
+        if autoSaveConfig then
+            autoSaveConfig()
+        end
+    end
 
 	local function loadSettings()
 		local d = readJSON(SETTINGS_PATH)
@@ -6581,7 +7856,7 @@ local function initMovementModule(desyncTabs, musicTabs, aimTabs)
 
 		local prompt = Instance.new("ProximityPrompt")
 		prompt.Parent = circle
-		prompt.Enabled = Settings.PromptEnabled
+		prompt.Enabled = Settings.PromptEnabled and Keybinds.Prompt ~= ""
 		prompt.MaxActivationDistance = Settings.PromptDistance
 		prompt.RequiresLineOfSight = false
 		prompt.HoldDuration = 0
@@ -7692,43 +8967,61 @@ local function initMovementModule(desyncTabs, musicTabs, aimTabs)
 	------------------------------------------------------------
 
 	local function applyPromptKey()
-		local kc = keyCodeByName(Keybinds.Prompt)
-		for _, data in pairs(markerData) do
-			if data.Prompt then
-				data.Prompt.KeyboardKeyCode = kc
-			end
-		end
-	end
+        local kc = keyCodeByName(Keybinds.Prompt)
+
+        for _, data in pairs(markerData) do
+            if data.Prompt then
+                data.Prompt.KeyboardKeyCode = kc
+                data.Prompt.Enabled = Settings.PromptEnabled and Keybinds.Prompt ~= ""
+            end
+        end
+    end
 
 	local function bindRow(parent, label, key, onSet)
         local b
 
-        b = mvButton(parent, label .. ": [" .. Keybinds[key] .. "]", function()
+        local function paint()
+            if b then
+                b.Text = label .. ": [" .. movementKeyName(Keybinds[key]) .. "]"
+            end
+        end
+
+        b = mvButton(parent, label .. ": [" .. movementKeyName(Keybinds[key]) .. "]", function()
             if movementBindCapture then return end
 
             movementBindCapture = function(name)
-                Keybinds[key] = name
-
-                if b then
-                    b.Text = label .. ": [" .. name .. "]"
+                if name == nil or name == "" then
+                    Keybinds[key] = ""
+                else
+                    Keybinds[key] = name
                 end
 
+                paint()
+
                 saveSettings()
+                if autoSaveConfig then
+                    autoSaveConfig(true)
+                end
 
                 if onSet then
                     onSet()
                 end
 
                 if setStatus then
-                    setStatus("Keybind set: " .. label .. " -> " .. name)
+                    if Keybinds[key] == "" then
+                        setStatus("Keybind cleared: " .. label)
+                    else
+                        setStatus("Keybind set: " .. label .. " -> " .. Keybinds[key])
+                    end
                 end
             end
 
             if b then
-                b.Text = label .. ": [press any key]"
+                b.Text = label .. ": [press any key | Backspace = clear]"
             end
         end, nil, nil, 28)
 
+        paint()
         return b
     end
 
@@ -7901,12 +9194,15 @@ local function initMovementModule(desyncTabs, musicTabs, aimTabs)
 		local name = input.KeyCode.Name
 
 		if movementBindCapture then
-			if name ~= "Unknown" then
-				movementBindCapture(name)
-			end
-			movementBindCapture = nil
-			return
-		end
+            if input.KeyCode == Enum.KeyCode.Backspace then
+                movementBindCapture(nil)
+            elseif name ~= "Unknown" then
+                movementBindCapture(name)
+            end
+
+            movementBindCapture = nil
+            return
+        end
 
 		if not unlocked then return end
 	    if processed then return end
@@ -7977,7 +9273,7 @@ local function initMovementModule(desyncTabs, musicTabs, aimTabs)
 		pcall(function() markersFolder:Destroy() end)
 	end
 
-	ScreenGui.Destroying:Connect(cleanupMovement)
+	-- Cleanup будет вызван ниже вместе с выключением Movement
 
 	pcall(function()
 		local old = shared["EmilyUiMovementCleanup"]
@@ -8210,6 +9506,14 @@ MovementSidebarToggle.MouseButton1Click:Connect(function()
 	setMovementEnabled(not MovementEnabled)
 end)
 
+ScreenGui.Destroying:Connect(function()
+    pcall(function()
+        setMovementEnabled(false)
+    end)
+
+    pcall(cleanupMovement)
+end)
+
 local function deepCopyMovement(t)
 	local ok, json = pcall(function() return HttpService:JSONEncode(t) end)
 	if not ok then return {} end
@@ -8324,7 +9628,7 @@ Apply = applyMovementConfig,
 Reset = resetMovementConfig,
 }
 end
-MovementAPI = initMovementModule(desyncTabs, musicTabs, AimAPI.Tabs)
+MovementAPI = initMovementModule(desyncTabs, musicTabs, AimAPI and AimAPI.Tabs or {})
 
 -- =========================================================
 -- ========= MOVEMENT RECORDER MODULE END ==================
@@ -8681,6 +9985,36 @@ local function saveNamedConfig()
 	end
 end
 
+local function saveLastNamedConfigSilent()
+    if not filesSupported() then return end
+
+    local name = getLastConfigName()
+    if not name or name == "" then return end
+
+    pcall(function()
+        if not isfolder("EmilyUi/FuckYou") then makefolder("EmilyUi/FuckYou") end
+        if not isfolder(configFolder) then makefolder(configFolder) end
+    end)
+
+    local ok, json = pcall(function()
+        return HttpService:JSONEncode(gatherConfig())
+    end)
+
+    if ok and json then
+        pcall(function()
+            writefile(configFolder .. "/" .. name .. ".json", json)
+        end)
+    end
+end
+
+registerConfigSaveListener(saveLastNamedConfigSilent)
+
+ScreenGui.Destroying:Connect(function()
+    if unlocked then
+        autoSaveConfig(true)
+    end
+end)
+
 createContentButton(tabFrames.Settings, "Save config", saveNamedConfig)
 createContentButton(tabFrames.Settings, "Refresh config list", refreshConfigList)
 
@@ -8994,7 +10328,11 @@ local function unlockScript(userGroup, daysLeft)
 		loadNamedConfig(lastCfgName)
 	end
 
-	notify("Fuck you! is loaded", "Welcome! Role: " .. (userGroup or "User"))
+	if autoSaveConfig then
+        autoSaveConfig(true)
+    end
+
+    notify("Fuck you! is loaded", "Welcome! Role: " .. (userGroup or "User"))
 end
 
 local function isGroupAllowed(groupName)
@@ -9074,5 +10412,16 @@ BtnSubmit.Position = UDim2.new(0.5, -75, 0, 240)
 
 --// Принудительно применяем текущую тему (цвета + прозрачность) ко всему, включая KeyWindow
 applyTheme()
+
+-- Автосохранение общего конфига
+task.spawn(function()
+    while true do
+        task.wait(600) -- 10 минут
+
+        if autoSaveConfig then
+            autoSaveConfig(true)
+        end
+    end
+end)
 
 task.spawn(checkKeySystem)
