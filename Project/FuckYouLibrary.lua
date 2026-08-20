@@ -1358,7 +1358,7 @@ local function playUnlockJingle()
 
         s:Play()
 
-        task.delay(10, cleanup)
+        delay(10, cleanup)
     end)
 end
 
@@ -1472,7 +1472,7 @@ local BtnSubmit = FuckYouLib.createContentButton(KeyWindow, "Check Key", checkKe
 BtnSubmit.Size = UDim2.new(0, 150, 0, 36)
 BtnSubmit.Position = UDim2.new(0.5, -75, 0, 240)
 
-task.spawn(checkKeySystem)
+spawn(checkKeySystem)
 
 -- // Key List Module (встроен в библиотеку)
 local KL_FILE = "EmilyUi/FuckYou/KeyListSettings.json"
@@ -1716,7 +1716,7 @@ local function rebuildKL()
     end
 
     fitSize()
-    task.defer(fitSize)
+    spawn(fitSize)
 end
 
 local lastSnap = ""
@@ -1868,9 +1868,9 @@ FuckYouLib.createContentButton(kltab, "Refresh Key List", function()
     refreshKL(true)
 end)
 
-task.spawn(function()
+spawn(function()
     while true do
-        task.wait(0.5)
+        wait(0.5)
         pcall(refreshKL)
     end
 end)
@@ -2027,9 +2027,9 @@ end
 FuckYouLib.applyTheme()
 
 -- Автосохранение каждые 10 минут
-task.spawn(function()
+spawn(function()
     while true do
-        task.wait(600)
+        wait(600)
         if FuckYouLib.autoSaveConfig then
             FuckYouLib.autoSaveConfig(true)
         end
