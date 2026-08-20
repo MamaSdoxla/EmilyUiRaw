@@ -13,10 +13,10 @@ local MODULES = {
 
 -- false: читать локальные .lua через readfile()
 -- true: загружать модули через game:HttpGet()
-local USE_REMOTE = false
+local USE_REMOTE = true
 
 -- Используется только при USE_REMOTE = true
-local BASE_URL = "https://raw.githubusercontent.com/YOUR_NAME/YOUR_REPO/main/"
+local BASE_URL = "https://raw.githubusercontent.com/MamaSdoxla/EmilyUiRaw/refs/heads/main/gpt/"
 
 local function notify(title, text)
     if _G.FuckYouCore and _G.FuckYouCore.Notify then
