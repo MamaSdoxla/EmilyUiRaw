@@ -1,17 +1,9 @@
 --// Loader.lua — Главный загрузчик FuckYou UI
 local function loadModule(url)
-    local success, source = pcall(function()
-        return game:HttpGet(url)
-    end)
-    if not success then
-        warn("[FuckYou] Failed to load: " .. url)
-        return nil
-    end
+    local success, source = pcall(function() return game:HttpGet(url) end)
+    if not success then warn("[FuckYou] Failed to load: " .. url); return nil end
     local fn, err = loadstring(source)
-    if not fn then
-        warn("[FuckYou] Compile error: " .. tostring(err))
-        return nil
-    end
+    if not fn then warn("[FuckYou] Compile error: " .. tostring(err)); return nil end
     return fn()
 end
 
@@ -20,10 +12,7 @@ local BASE_URL = "https://raw.githubusercontent.com/MamaSdoxla/EmilyUiRaw/refs/h
 
 --// 1. Загружаем библиотеку
 local Library = loadModule(BASE_URL .. "FuckYouLibrary.lua")
-if not Library then
-    warn("[FuckYou] CRITICAL: Library failed to load!")
-    return
-end
+if not Library then warn("[FuckYou] CRITICAL: Library failed to load!"); return end
 
 --// 2. Инициализируем GUI
 Library.initGUI()
@@ -48,9 +37,7 @@ local aimData = initAim and initAim(Library)
 local movementData = initMovement and initMovement(Library)
 
 --// 5. Регистрируем API модулей
-if emilyData then
-    Library.VisualsAPI = emilyData.VisualsAPI
-end
+if emilyData then Library.VisualsAPI = emilyData.VisualsAPI end
 Library.AimAPI = aimData
 Library.MovementAPI = movementData
 
@@ -62,160 +49,71 @@ local keyTextBox, keyInfoLabel = Library.createKeyWindow()
 
 --// 8. Настраиваем переключение вкладок
 local function switchTab(targetTab)
-    for _, tab in ipairs(Library.tabs) do
-        tab.Frame.Visible = (tab == targetTab)
-    end
+    for _, tab in ipairs(Library.tabs) do tab.Frame.Visible = (tab == targetTab) end
     Library.updateTabButtonsTheme()
 end
 
---// Создаём кнопки для основных вкладок
 for index, tab in ipairs(Library.tabs) do
-    local btn = Library.create("TextButton", {
-        Name = "Btn_" .. tab.Name, Parent = Library.MenuInsided,
-        Size = UDim2.new(1, 0, 0, 30),
-        LayoutOrder = index, Visible = false,
-        BackgroundColor3 = Library.uiColor_ButtonColor,
-        BorderColor3 = Library.COL_BORDER,
-        TextColor3 = Library.uiColor_TextColor,
-        Text = tab.Name, Font = Library.FONT, TextSize = 12
-    })
-    tab.Button = btn
-    table.insert(Library.themeElements.Buttons, btn)
-    table.insert(Library.themeElements.Texts, btn)
+    local btn = Library.create("TextButton", {Name = "Btn_" .. tab.Name, Parent = Library.MenuInsided, Size = UDim2.new(1, 0, 0, 30), LayoutOrder = index, Visible = false, BackgroundColor3 = Library.uiColor_ButtonColor, BorderColor3 = Library.COL_BORDER, TextColor3 = Library.uiColor_TextColor, Text = tab.Name, Font = Library.FONT, TextSize = 12})
+    tab.Button = btn; table.insert(Library.themeElements.Buttons, btn); table.insert(Library.themeElements.Texts, btn)
     btn.MouseButton1Click:Connect(function() switchTab(tab) end)
 end
 
---// Функции показа кнопок модулей
 local function hideAllModuleButtons()
-    for _, t in ipairs(Library.tabs) do
-        if t.Button then t.Button.Visible = false end
-    end
-    if desyncData then
-        for _, t in ipairs(desyncData.Tabs) do
-            if t.Button then t.Button.Visible = false end
-        end
-    end
-    if musicData then
-        for _, t in ipairs(musicData.Tabs) do
-            if t.Button then t.Button.Visible = false end
-        end
-    end
-    if aimData then
-        for _, t in ipairs(aimData.Tabs) do
-            if t.Button then t.Button.Visible = false end
-        end
-    end
-    if movementData then
-        for _, t in ipairs(movementData.Tabs) do
-            if t.Button then t.Button.Visible = false end
-        end
-    end
+    for _, t in ipairs(Library.tabs) do if t.Button then t.Button.Visible = false end end
+    if desyncData then for _, t in ipairs(desyncData.Tabs) do if t.Button then t.Button.Visible = false end end end
+    if musicData then for _, t in ipairs(musicData.Tabs) do if t.Button then t.Button.Visible = false end end end
+    if aimData then for _, t in ipairs(aimData.Tabs) do if t.Button then t.Button.Visible = false end end end
+    if movementData then for _, t in ipairs(movementData.Tabs) do if t.Button then t.Button.Visible = false end end end
 end
 
 local function hideAllFrames()
     for _, t in ipairs(Library.tabs) do t.Frame.Visible = false end
-    if desyncData then
-        for _, t in ipairs(desyncData.Tabs) do t.Frame.Visible = false end
-    end
-    if musicData then
-        for _, t in ipairs(musicData.Tabs) do t.Frame.Visible = false end
-    end
-    if aimData then
-        for _, t in ipairs(aimData.Tabs) do t.Frame.Visible = false end
-    end
-    if movementData then
-        for _, t in ipairs(movementData.Tabs) do t.Frame.Visible = false end
-    end
+    if desyncData then for _, t in ipairs(desyncData.Tabs) do t.Frame.Visible = false end end
+    if musicData then for _, t in ipairs(musicData.Tabs) do t.Frame.Visible = false end end
+    if aimData then for _, t in ipairs(aimData.Tabs) do t.Frame.Visible = false end end
+    if movementData then for _, t in ipairs(movementData.Tabs) do t.Frame.Visible = false end end
 end
 
 local function updateModuleTogglesVisibility(group)
-    for _, t in ipairs(Library.moduleToggles) do
-        t.btn.Visible = (t.group == group)
-    end
+    for _, t in ipairs(Library.moduleToggles) do t.btn.Visible = (t.group == group) end
 end
 
---// Кнопка EmilyUi
 EmilyUiBtn.MouseButton1Click:Connect(function()
-    hideAllModuleButtons()
-    hideAllFrames()
-    for _, t in ipairs(Library.tabs) do
-        if t.Button then t.Button.Visible = true end
-    end
-    if Library.tabs[1] then
-        Library.tabs[1].Frame.Visible = true
-    end
-    Library.updateTabButtonsTheme()
-    updateModuleTogglesVisibility("Main")
+    hideAllModuleButtons(); hideAllFrames()
+    for _, t in ipairs(Library.tabs) do if t.Button then t.Button.Visible = true end end
+    if Library.tabs[1] then Library.tabs[1].Frame.Visible = true end
+    Library.updateTabButtonsTheme(); updateModuleTogglesVisibility("Main")
 end)
 
---// Кнопка Desync
 DesyncBtn.MouseButton1Click:Connect(function()
-    hideAllModuleButtons()
-    hideAllFrames()
-    if desyncData then
-        for _, t in ipairs(desyncData.Tabs) do
-            if t.Button then t.Button.Visible = true end
-        end
-        if desyncData.Tabs[1] then
-            desyncData.Tabs[1].Frame.Visible = true
-        end
-    end
-    Library.updateTabButtonsTheme()
-    updateModuleTogglesVisibility("Desync")
+    hideAllModuleButtons(); hideAllFrames()
+    if desyncData then for _, t in ipairs(desyncData.Tabs) do if t.Button then t.Button.Visible = true end end; if desyncData.Tabs[1] then desyncData.Tabs[1].Frame.Visible = true end end
+    Library.updateTabButtonsTheme(); updateModuleTogglesVisibility("Desync")
 end)
 
---// Кнопка Music
 MusicBtn.MouseButton1Click:Connect(function()
-    hideAllModuleButtons()
-    hideAllFrames()
-    if musicData then
-        for _, t in ipairs(musicData.Tabs) do
-            if t.Button then t.Button.Visible = true end
-        end
-        if musicData.Tabs[1] then
-            musicData.Tabs[1].Frame.Visible = true
-        end
-    end
-    Library.updateTabButtonsTheme()
-    updateModuleTogglesVisibility("Music")
+    hideAllModuleButtons(); hideAllFrames()
+    if musicData then for _, t in ipairs(musicData.Tabs) do if t.Button then t.Button.Visible = true end end; if musicData.Tabs[1] then musicData.Tabs[1].Frame.Visible = true end end
+    Library.updateTabButtonsTheme(); updateModuleTogglesVisibility("Music")
 end)
 
---// Кнопка Aim
 AimBtn.MouseButton1Click:Connect(function()
-    hideAllModuleButtons()
-    hideAllFrames()
-    if aimData then
-        for _, t in ipairs(aimData.Tabs) do
-            if t.Button then t.Button.Visible = true end
-        end
-        if aimData.Tabs[1] then
-            aimData.Tabs[1].Frame.Visible = true
-        end
-    end
-    Library.updateTabButtonsTheme()
-    updateModuleTogglesVisibility("Aim")
+    hideAllModuleButtons(); hideAllFrames()
+    if aimData then for _, t in ipairs(aimData.Tabs) do if t.Button then t.Button.Visible = true end end; if aimData.Tabs[1] then aimData.Tabs[1].Frame.Visible = true end end
+    Library.updateTabButtonsTheme(); updateModuleTogglesVisibility("Aim")
 end)
 
---// Кнопка Movement (если есть)
 if movementData then
-    local MovementBtn = Library.makeSideBtn("Movement", 236)
-    MovementBtn.TextSize = 11
-    MovementBtn.TextWrapped = true
+    local MovementBtn = Library.makeSideBtn("Movement", 236); MovementBtn.TextSize = 11; MovementBtn.TextWrapped = true
     MovementBtn.MouseButton1Click:Connect(function()
-        hideAllModuleButtons()
-        hideAllFrames()
-        for _, t in ipairs(movementData.Tabs) do
-            if t.Button then t.Button.Visible = true end
-        end
-        if movementData.Tabs[1] then
-            movementData.Tabs[1].Frame.Visible = true
-        end
-        Library.updateTabButtonsTheme()
-        updateModuleTogglesVisibility("Movement")
+        hideAllModuleButtons(); hideAllFrames()
+        for _, t in ipairs(movementData.Tabs) do if t.Button then t.Button.Visible = true end end
+        if movementData.Tabs[1] then movementData.Tabs[1].Frame.Visible = true end
+        Library.updateTabButtonsTheme(); updateModuleTogglesVisibility("Movement")
     end)
 end
 
---// 9. Top bar кнопки
 local Minus = Library.makeTopBtn("-", 3)
 local Equal = Library.makeTopBtn("=", 2)
 local X = Library.makeTopBtn("X", 1)
@@ -225,146 +123,57 @@ local STRIP_SIZE = UDim2.new(0, 940, 0, 45)
 local windowState = "full"
 
 local function tweenSize(target, cb)
-    local tw = game:GetService("TweenService"):Create(
-        Library.FuckYou,
-        TweenInfo.new(0.22, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
-        {Size = target}
-    )
-    if cb then
-        tw.Completed:Connect(function(ps)
-            if ps == Enum.PlaybackState.Completed then cb() end
-        end)
-    end
+    local tw = game:GetService("TweenService"):Create(Library.FuckYou, TweenInfo.new(0.22, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Size = target})
+    if cb then tw.Completed:Connect(function(ps) if ps == Enum.PlaybackState.Completed then cb() end end) end
     tw:Play()
 end
 
 local function openFull()
-    Library.FuckYou.Visible = true
-    Library.uiCollapsed = false
-    Library.applyBackground()
-    tweenSize(FULL_SIZE)
-    windowState = "full"
+    Library.FuckYou.Visible = true; Library.uiCollapsed = false; Library.applyBackground(); tweenSize(FULL_SIZE); windowState = "full"
 end
 
-X.MouseButton1Click:Connect(function()
-    Library.ScreenGui:Destroy()
-end)
-
+X.MouseButton1Click:Connect(function() Library.ScreenGui:Destroy() end)
 Equal.MouseButton1Click:Connect(function()
-    if windowState == "full" then
-        windowState = "strip"
-        Library.uiCollapsed = true
-        Library.applyBackground()
-        tweenSize(STRIP_SIZE)
-    elseif windowState == "strip" then
-        openFull()
-    end
+    if windowState == "full" then windowState = "strip"; Library.uiCollapsed = true; Library.applyBackground(); tweenSize(STRIP_SIZE)
+    elseif windowState == "strip" then openFull() end
 end)
-
 Minus.MouseButton1Click:Connect(function()
-    windowState = "hidden"
-    Library.uiCollapsed = true
-    Library.applyBackground()
-    tweenSize(UDim2.new(0, 940, 0, 0), function()
-        Library.FuckYou.Visible = false
-    end)
+    windowState = "hidden"; Library.uiCollapsed = true; Library.applyBackground()
+    tweenSize(UDim2.new(0, 940, 0, 0), function() Library.FuckYou.Visible = false end)
 end)
 
---// 10. Toggle key
 game:GetService("UserInputService").InputBegan:Connect(function(input, processed)
     if processed then return end
     if input.KeyCode == Library.currentToggleKey and Library.unlocked then
-        if windowState == "hidden" then
-            openFull()
-        else
-            windowState = "hidden"
-            Library.FuckYou.Visible = false
-        end
+        if windowState == "hidden" then openFull() else windowState = "hidden"; Library.FuckYou.Visible = false end
     end
 end)
 
---// 11. Drag
 Library.makeDraggable(Library.TopBar, Library.FuckYou)
+Library.applyTheme(); Library.applyBackground(); Library.updateBlur()
 
---// 12. Применяем тему
-Library.applyTheme()
-Library.applyBackground()
-Library.updateBlur()
+task.spawn(function() Library.checkKeySystem(keyTextBox, keyInfoLabel) end)
+task.spawn(function() while true do task.wait(600); if Library.autoSaveConfig then Library.autoSaveConfig(true) end end end)
 
---// 13. Запускаем проверку ключа
-task.spawn(function()
-    Library.checkKeySystem(keyTextBox, keyInfoLabel)
-end)
-
---// 14. Автосохранение
-task.spawn(function()
-    while true do
-        task.wait(600)
-        if Library.autoSaveConfig then
-            Library.autoSaveConfig(true)
-        end
-    end
-end)
-
---// 15. Key List Module
 local KeyListAPI = (function()
-    local KL = {
-        Enabled = true,
-        ShowEmily = true, ShowDesync = true,
-        ShowMusic = true, ShowAim = true,
-        ShowMovement = true,
-    }
-    local overlay = Library.create("Frame", {
-        Name = "FYKeyList", Parent = Library.ScreenGui,
-        AnchorPoint = Vector2.new(1, 1),
-        Position = UDim2.new(1, -16, 1, -16),
-        Size = UDim2.new(0, 250, 0, 60),
-        BackgroundColor3 = Library.uiColor_MainWindow,
-        BorderColor3 = Library.COL_BORDER, BorderSizePixel = 1,
-        Visible = false, ZIndex = 5,
-    })
+    local KL = {Enabled = true, ShowEmily = true, ShowDesync = true, ShowMusic = true, ShowAim = true, ShowMovement = true}
+    local overlay = Library.create("Frame", {Name = "FYKeyList", Parent = Library.ScreenGui, AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -16, 1, -16), Size = UDim2.new(0, 250, 0, 60), BackgroundColor3 = Library.uiColor_MainWindow, BorderColor3 = Library.COL_BORDER, BorderSizePixel = 1, Visible = false, ZIndex = 5})
     table.insert(Library.themeElements.MainWindow, overlay)
-    local titleBar = Library.create("TextLabel", {
-        Parent = overlay,
-        Size = UDim2.new(1, 0, 0, 24),
-        Position = UDim2.new(0, 0, 0, 2),
-        BackgroundTransparency = 1,
-        Text = "KEYBINDS",
-        TextColor3 = Library.uiColor_TextColor,
-        TextSize = 13, Font = Library.FONT, ZIndex = 6
-    })
+    local titleBar = Library.create("TextLabel", {Parent = overlay, Size = UDim2.new(1, 0, 0, 24), Position = UDim2.new(0, 0, 0, 2), BackgroundTransparency = 1, Text = "KEYBINDS", TextColor3 = Library.uiColor_TextColor, TextSize = 13, Font = Library.FONT, ZIndex = 6})
     table.insert(Library.themeElements.Texts, titleBar)
-    local rowsFrame = Library.create("Frame", {
-        Parent = overlay,
-        Size = UDim2.new(1, 0, 1, -26),
-        Position = UDim2.new(0, 0, 0, 26),
-        BackgroundTransparency = 1, ZIndex = 6
-    })
-    local rowsLayout = Library.create("UIListLayout", {
-        Parent = rowsFrame,
-        SortOrder = Enum.SortOrder.LayoutOrder,
-        Padding = UDim.new(0, 4)
-    })
-    local GROUP_MAP = {
-        {"ShowEmily", "EmilyUi", "EMILYUI"},
-        {"ShowDesync", "Desync", "DESYNC"},
-        {"ShowMusic", "Music", "MUSIC"},
-        {"ShowAim", "Aim", "AIM"},
-        {"ShowMovement", "Movement", "MOVEMENT"},
-    }
+    local rowsFrame = Library.create("Frame", {Parent = overlay, Size = UDim2.new(1, 0, 1, -26), Position = UDim2.new(0, 0, 0, 26), BackgroundTransparency = 1, ZIndex = 6})
+    local rowsLayout = Library.create("UIListLayout", {Parent = rowsFrame, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 4)})
+    local GROUP_MAP = {{"ShowEmily", "EmilyUi", "EMILYUI"}, {"ShowDesync", "Desync", "DESYNC"}, {"ShowMusic", "Music", "MUSIC"}, {"ShowAim", "Aim", "AIM"}, {"ShowMovement", "Movement", "MOVEMENT"}}
     local function collectRows()
         local out = {}
         for _, g in ipairs(GROUP_MAP) do
             if KL[g[1]] then
                 local fn = Library.keyListProviders[g[2]]
                 if fn then
-                    local ok, rows = pcall(fn)
-                    rows = (ok and type(rows) == "table") and rows or {}
+                    local ok, rows = pcall(fn); rows = (ok and type(rows) == "table") and rows or {}
                     if #rows > 0 then
                         table.insert(out, {"h", g[3]})
-                        for _, r in ipairs(rows) do
-                            table.insert(out, {"r", tostring(r[1]), tostring(r[2])})
-                        end
+                        for _, r in ipairs(rows) do table.insert(out, {"r", tostring(r[1]), tostring(r[2])}) end
                     end
                 end
             end
@@ -372,77 +181,22 @@ local KeyListAPI = (function()
         return out
     end
     local function rebuild()
-        for _, ch in ipairs(rowsFrame:GetChildren()) do
-            if ch:IsA("Frame") or ch:IsA("TextLabel") then ch:Destroy() end
-        end
+        for _, ch in ipairs(rowsFrame:GetChildren()) do if ch:IsA("Frame") or ch:IsA("TextLabel") then ch:Destroy() end end
         for i, it in ipairs(collectRows()) do
             if it[1] == "h" then
-                local h = Library.create("TextLabel", {
-                    Parent = rowsFrame, LayoutOrder = i,
-                    Size = UDim2.new(1, 0, 0, 14),
-                    BackgroundTransparency = 1,
-                    Text = it[2],
-                    TextColor3 = Library.uiColor_TextColor,
-                    TextSize = 11, Font = Library.FONT,
-                    TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 6,
-                })
+                local h = Library.create("TextLabel", {Parent = rowsFrame, LayoutOrder = i, Size = UDim2.new(1, 0, 0, 14), BackgroundTransparency = 1, Text = it[2], TextColor3 = Library.uiColor_TextColor, TextSize = 11, Font = Library.FONT, TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 6})
                 table.insert(Library.themeElements.Texts, h)
             else
-                local r = Library.create("Frame", {
-                    Parent = rowsFrame, LayoutOrder = i,
-                    Size = UDim2.new(1, 0, 0, 16),
-                    BackgroundTransparency = 1, ZIndex = 6
-                })
-                Library.create("TextLabel", {
-                    Parent = r,
-                    Size = UDim2.new(0.62, 0, 1, 0),
-                    BackgroundTransparency = 1,
-                    Text = it[2],
-                    TextColor3 = Library.uiColor_TextColor,
-                    TextSize = 12, Font = Library.FONT,
-                    TextXAlignment = Enum.TextXAlignment.Left,
-                    TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 6
-                })
-                Library.create("TextLabel", {
-                    Parent = r,
-                    Size = UDim2.new(0.38, 0, 1, 0),
-                    Position = UDim2.new(0.62, 0, 0, 0),
-                    BackgroundTransparency = 1,
-                    Text = it[3],
-                    TextColor3 = Library.uiColor_ToggleOnText,
-                    TextSize = 12, Font = Library.FONT,
-                    TextXAlignment = Enum.TextXAlignment.Right,
-                    TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 6
-                })
+                local r = Library.create("Frame", {Parent = rowsFrame, LayoutOrder = i, Size = UDim2.new(1, 0, 0, 16), BackgroundTransparency = 1, ZIndex = 6})
+                Library.create("TextLabel", {Parent = r, Size = UDim2.new(0.62, 0, 1, 0), BackgroundTransparency = 1, Text = it[2], TextColor3 = Library.uiColor_TextColor, TextSize = 12, Font = Library.FONT, TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 6})
+                Library.create("TextLabel", {Parent = r, Size = UDim2.new(0.38, 0, 1, 0), Position = UDim2.new(0.62, 0, 0, 0), BackgroundTransparency = 1, Text = it[3], TextColor3 = Library.uiColor_ToggleOnText, TextSize = 12, Font = Library.FONT, TextXAlignment = Enum.TextXAlignment.Right, TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 6})
             end
         end
         overlay.Size = UDim2.new(0, 250, 0, 26 + rowsLayout.AbsoluteContentSize.Y + 8)
     end
-    task.spawn(function()
-        while true do
-            task.wait(0.5)
-            if KL.Enabled and Library.unlocked then
-                overlay.Visible = true
-                rebuild()
-            else
-                overlay.Visible = false
-            end
-        end
-    end)
+    task.spawn(function() while true do task.wait(0.5); if KL.Enabled and Library.unlocked then overlay.Visible = true; rebuild() else overlay.Visible = false end end end)
     Library.makeDraggable(titleBar, overlay)
-    return {
-        Gather = function()
-            local out = {}
-            for k, v in pairs(KL) do out[k] = v end
-            return out
-        end,
-        Apply = function(d)
-            if type(d) ~= "table" then return end
-            for k, v in pairs(d) do
-                if KL[k] ~= nil then KL[k] = v end
-            end
-        end,
-    }
+    return {Gather = function() local out = {}; for k, v in pairs(KL) do out[k] = v end; return out end, Apply = function(d) if type(d) ~= "table" then return end; for k, v in pairs(d) do if KL[k] ~= nil then KL[k] = v end end end}
 end)()
 Library.KeyListAPI = KeyListAPI
 
