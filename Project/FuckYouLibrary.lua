@@ -1,7 +1,7 @@
 -- ============================================================
--- FuckYouLibrary.lua
+-- FuckYouLibrary.lua (без системы ключей)
 -- ============================================================
--- Библиотека ядра: UI, темы, конфиги, ключи, утилиты.
+-- Библиотека ядра: UI, темы, конфиги, утилиты.
 -- Экспортирует FuckYouLib в _G.
 -- ============================================================
 
@@ -16,6 +16,12 @@ local StarterGui = game:GetService("StarterGui")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 local LocalPlayer = Players.LocalPlayer
+
+--// Глобальные переменные для других модулей (без ключей)
+currentKeyData = { group = "User", daysLeft = "Infinity" }
+_G.currentKeyData = currentKeyData
+unlocked = true
+_G.unlocked = unlocked
 
 --// Стиль
 FuckYouLib.COL_BG = Color3.fromRGB(12, 12, 12)
@@ -47,7 +53,7 @@ FuckYouLib.uiColor_ToggleOnText = Color3.fromRGB(100, 255, 100)
 FuckYouLib.uiColor_ToggleOffText = Color3.fromRGB(255, 100, 100)
 FuckYouLib.uiCollapsed = false
 
---// Система уведомлений (без )
+--// Система уведомлений (без task)
 function FuckYouLib.notify(title, text)
     spawn(function()
         local notificationData = {
@@ -117,7 +123,7 @@ function FuckYouLib.notify(title, text)
     end)
 end
 
-FuckYouLib.notify("Fuck you! v1.2", "To get key goto discord or ask for a permanent one.")
+FuckYouLib.notify("Fuck you! v1.2", "Script loaded successfully!")
 
 --// Вспомогательная функция создания Instance
 function FuckYouLib.create(className, properties)
@@ -1160,219 +1166,12 @@ end
 
 makeDraggable(TopBar, FuckYou)
 
--- // Система ключей (Key System)
-local KeyWindow = FuckYouLib.create("Frame", {
-    Name = "KeyWindow",
-    Parent = ScreenGui,
-    AnchorPoint = Vector2.new(0.5, 0.5),
-    Position = UDim2.new(0.5, 0, 0.5, 0),
-    Size = UDim2.new(0, 450, 0, 310),
-    BackgroundColor3 = FuckYouLib.uiColor_MainWindow,
-    BorderColor3 = COL_BORDER
-})
-table.insert(FuckYouLib.themeElements.MainWindow, KeyWindow)
+-- ======= ВСЯ СИСТЕМА КЛЮЧЕЙ УДАЛЕНА =======
+-- Скрипт сразу разблокирован (unlocked = true)
 
-local KeyTopBar = FuckYouLib.create("Frame", {
-    Parent = KeyWindow,
-    Size = UDim2.new(1, 0, 0, 35),
-    BackgroundColor3 = FuckYouLib.uiColor_TopBar,
-    BorderSizePixel = 0
-})
-table.insert(FuckYouLib.themeElements.TopBars, KeyTopBar)
-
-local KeyTitle = FuckYouLib.create("TextLabel", {
-    Parent = KeyTopBar,
-    Size = UDim2.new(1, -40, 1, 0),
-    Position = UDim2.new(0, 10, 0, 0),
-    BackgroundTransparency = 1,
-    Text = "Fuck you! — Key System",
-    TextColor3 = FuckYouLib.uiColor_TextColor,
-    TextSize = 15,
-    Font = FONT,
-    TextXAlignment = Enum.TextXAlignment.Left
-})
-table.insert(FuckYouLib.themeElements.Texts, KeyTitle)
-
-local KeyCloseBtn = FuckYouLib.create("TextButton", {
-    Parent = KeyTopBar,
-    Size = UDim2.new(0, 35, 0, 35),
-    Position = UDim2.new(1, -35, 0, 0),
-    BackgroundColor3 = Color3.fromRGB(120, 40, 40),
-    BorderColor3 = COL_BORDER,
-    TextColor3 = Color3.fromRGB(255, 255, 255),
-    Text = "X",
-    TextSize = 13,
-    Font = FONT
-})
-KeyCloseBtn.MouseButton1Click:Connect(function()
-    ScreenGui:Destroy()
-end)
-
-local KeyInfoLabel = FuckYouLib.create("TextLabel", {
-    Parent = KeyWindow,
-    Size = UDim2.new(1, -30, 0, 40),
-    Position = UDim2.new(0, 15, 0, 50),
-    BackgroundTransparency = 1,
-    Text = "Please enter your access key below to load the script.\nKey can be obtained via Discord.",
-    TextColor3 = FuckYouLib.uiColor_TextColor,
-    TextSize = 13,
-    Font = FONT,
-    TextWrapped = true
-})
-table.insert(FuckYouLib.themeElements.Texts, KeyInfoLabel)
-
-local function copyDiscord()
-    if setclipboard then
-        setclipboard("https://discord.gg/75Dz8T9hHR")
-    end
-    FuckYouLib.notify("Discord", "The link is copied")
-end
-
-local KeyDiscordBtn = FuckYouLib.createContentButton(KeyWindow, "Click to copy Discord Server link", copyDiscord)
-KeyDiscordBtn.Size = UDim2.new(1, -40, 0, 36)
-KeyDiscordBtn.Position = UDim2.new(0, 20, 0, 105)
-
-local KeyTextBox = FuckYouLib.createTextBox(KeyWindow, "Enter key here...", FONT)
-KeyTextBox.Size = UDim2.new(1, -40, 0, 36)
-KeyTextBox.Position = UDim2.new(0, 20, 0, 160)
-
-makeDraggable(KeyTopBar, KeyWindow)
-
-KeyWindow:GetPropertyChangedSignal("Visible"):Connect(function()
-    if KeyWindow.Visible and FuckYouLib.uiBlurSize > 0 then
-        blurEffect.Parent = game:GetService("Lighting")
-        blurEffect.Size = FuckYouLib.uiBlurSize
-        blurEffect.Enabled = true
-    else
-        FuckYouLib.updateBlur()
-    end
-end)
-
--- Крипто-функции
-local SECRET_KEY = "XenoMeowEmilyUi11037"
-local b64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
-
-local function base64_decode(data)
-    data = string.gsub(data, '[^' .. b64 .. '=]', '')
-    return (data:gsub('.', function(x)
-        if x == '=' then
-            return ''
-        end
-        local r, f = '', (b64:find(x) - 1)
-        for i = 6, 1, -1 do
-            r = r .. (f % 2 ^ i - f % 2 ^ (i - 1) > 0 and '1' or '0')
-        end
-        return r
-    end):gsub('%d%d%d?%d?%d?%d?%d?%d?', function(x)
-        if #x ~= 8 then
-            return ''
-        end
-        local c = 0
-        for i = 1, 8 do
-            c = c + (x:sub(i, i) == '1' and 2 ^ (8 - i) or 0)
-        end
-        return string.char(c)
-    end))
-end
-
-local function xor_decrypt(str, key)
-    local result = {}
-    local keyLen = #key
-    for i = 1, #str do
-        result[i] = string.char(bit32.bxor(string.byte(str, i), string.byte(key, ((i - 1) % keyLen) + 1)))
-    end
-    return table.concat(result)
-end
-
-local function decryptData(encryptedBase64, key)
-    encryptedBase64 = string.gsub(encryptedBase64, "%s+", "")
-    return xor_decrypt(base64_decode(encryptedBase64), key)
-end
-
-local function getKeyDaysLeft(timeStr)
-    if not timeStr or timeStr == "inf" then
-        return "Infinity"
-    end
-
-    local day, month, year = timeStr:match("(%d+)%.(%d+)%.(%d+)")
-    if not day or not month or not year then
-        return 0
-    end
-
-    local expireTime = os.time({
-        day = tonumber(day),
-        month = tonumber(month),
-        year = tonumber(year),
-        hour = 0,
-        min = 0,
-        sec = 0
-    })
-
-    local diff = expireTime - os.time()
-    if diff <= 0 then
-        return 0
-    else
-        return diff / 86400
-    end
-end
-
-local function playUnlockJingle()
-    pcall(function()
-        local SoundService = game:GetService("SoundService")
-        local s = Instance.new("Sound")
-        s.Name = "FuckYouUnlockSound"
-        s.SoundId = "rbxassetid://115440201770223"
-        s.Volume = 1
-        s.Looped = false
-        s.TimePosition = 0
-        s.Parent = SoundService
-
-        local done = false
-        local conn = nil
-
-        local function cleanup()
-            if done then
-                return
-            end
-            done = true
-
-            if conn then
-                conn:Disconnect()
-            end
-
-            pcall(function()
-                s:Stop()
-            end)
-            pcall(function()
-                s:Destroy()
-            end)
-        end
-
-        s.Ended:Connect(cleanup)
-
-        conn = RunService.Heartbeat:Connect(function()
-            if not done and s.IsPlaying and s.TimePosition >= 2 then
-                cleanup()
-            end
-        end)
-
-        s:Play()
-
-        delay(10, cleanup)
-    end)
-end
-
-local cachedKeyResponse = nil
-local currentKeyData = { group = "Free", daysLeft = "Infinity" }
-_G.currentKeyData = currentKeyData  -- <-- ЭКСПОРТ
-local unlocked = false
-_G.unlocked = unlocked              -- <-- ЭКСПОРТ (если используется в других модулях)
-local beta = false
-
+-- // Функция "разблокировки" (теперь просто показывает окно)
 function FuckYouLib.unlockScript(userGroup, daysLeft)
-    unlocked = true
-    playUnlockJingle()
-    KeyWindow:Destroy()
+    -- Окно ввода ключа отсутствует, просто показываем главное окно
     FuckYou.Visible = true
     state = "full"
 
@@ -1393,87 +1192,10 @@ function FuckYouLib.unlockScript(userGroup, daysLeft)
     FuckYouLib.notify("Fuck you! is loaded", "Welcome! Role: " .. (userGroup or "User"))
 end
 
-local function isGroupAllowed(groupName)
-    local g = string.lower(tostring(groupName or ""))
+-- Сразу вызываем разблокировку
+FuckYouLib.unlockScript("User", "Infinity")
 
-    if beta then
-        return g == "tester" or g == "coder"
-    else
-        return g == "free" or g == "user" or g == "tester" or g == "coder"
-    end
-end
-
-local function checkKeySystem()
-    if not cachedKeyResponse then
-        local success, response = pcall(function()
-            return game:HttpGet("https://raw.githubusercontent.com/MamaSdoxla/EmilyUi/refs/heads/main/nuh-uh.json")
-        end)
-
-        if not success or not response or #response < 10 then
-            KeyInfoLabel.Text = "Error: Failed to fetch key database!"
-            KeyInfoLabel.TextColor3 = Color3.fromRGB(220, 50, 50)
-            return
-        end
-
-        local ok, decryptedText = pcall(function()
-            return decryptData(response, SECRET_KEY)
-        end)
-
-        if not ok or not decryptedText or #decryptedText < 5 then
-            KeyInfoLabel.Text = "Error: Failed to decrypt!\nLen: " .. tostring(decryptedText and #decryptedText or 0)
-            KeyInfoLabel.TextColor3 = Color3.fromRGB(220, 50, 50)
-            return
-        end
-
-        cachedKeyResponse = decryptedText
-    end
-
-    local jsonSuccess, keysList = pcall(function()
-        return HttpService:JSONDecode(cachedKeyResponse)
-    end)
-
-    if not jsonSuccess or type(keysList) ~= "table" then
-        KeyInfoLabel.Text = "Error: Database parsing failed!\nPreview: " .. string.sub(tostring(cachedKeyResponse), 1, 60)
-        KeyInfoLabel.TextColor3 = Color3.fromRGB(220, 50, 50)
-        return
-    end
-
-    local myName = string.lower(LocalPlayer.Name)
-    local enteredKey = KeyTextBox.Text
-
-    for _, data in ipairs(keysList) do
-        if data.key and data.robloxName and data.group and data.timeTillWorks then
-            local nameMatch = (data.robloxName == "none") or (string.lower(data.robloxName) == myName)
-
-            if nameMatch and isGroupAllowed(data.group) then
-                local daysLeft = getKeyDaysLeft(data.timeTillWorks)
-
-                if daysLeft == "Infinity" or (type(daysLeft) == "number" and daysLeft > 0) then
-                    if data.key == "none" or (enteredKey == data.key) then
-                        FuckYouLib.unlockScript(data.group, daysLeft)
-                        return
-                    end
-                end
-            end
-        end
-    end
-
-    if beta then
-        KeyInfoLabel.Text = "Beta mode: only Tester/Coder keys are allowed."
-    else
-        KeyInfoLabel.Text = "Enter key please! You can ask for a key in discord."
-    end
-
-    KeyInfoLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-end
-
-local BtnSubmit = FuckYouLib.createContentButton(KeyWindow, "Check Key", checkKeySystem, Color3.fromRGB(40, 90, 40))
-BtnSubmit.Size = UDim2.new(0, 150, 0, 36)
-BtnSubmit.Position = UDim2.new(0.5, -75, 0, 240)
-
-spawn(checkKeySystem)
-
--- // Key List Module (встроен в библиотеку)
+-- // Key List Module (встроен в библиотеку) - без изменений
 local KL_FILE = "EmilyUi/FuckYou/KeyListSettings.json"
 local KL = {
     Enabled = true,
