@@ -6,6 +6,16 @@
 -- ============================================================
 
 local FuckYouLib = _G.FuckYouLib
+-- Сервисы
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+local LightingService = game:GetService("Lighting")
+local StatsService = game:GetService("Stats")
+local TeleportService = game:GetService("TeleportService")
+local Marketplace = game:GetService("MarketplaceService")
+local LocalPlayer = Players.LocalPlayer
 if not FuckYouLib then error("FuckYouLibrary not loaded") end
 
 local COL_BORDER = FuckYouLib.COL_BORDER
