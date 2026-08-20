@@ -6,6 +6,8 @@
 -- ============================================================
 
 local FuckYouLib = _G.FuckYouLib
+if not FuckYouLib then error("FuckYouLibrary not loaded") end
+
 -- Сервисы
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
@@ -16,7 +18,6 @@ local StatsService = game:GetService("Stats")
 local TeleportService = game:GetService("TeleportService")
 local Marketplace = game:GetService("MarketplaceService")
 local LocalPlayer = Players.LocalPlayer
-if not FuckYouLib then error("FuckYouLibrary not loaded") end
 
 local COL_BORDER = FuckYouLib.COL_BORDER
 local FONT = FuckYouLib.FONT
@@ -404,11 +405,6 @@ renderAnimationsTab()
 -- CHARACTER, PLAYERS, VISUALS, UTILITIES, SERVER
 --============================================================
 
-local TeleportService = game:GetService("TeleportService")
-local LightingService = game:GetService("Lighting")
-local StatsService = game:GetService("Stats")
-local Marketplace = game:GetService("MarketplaceService")
-
 -- 1. CHARACTER
 local CharSettings = {Speed = 16, Jump = 50, Gravity = 196.2}
 local SpinSettings = { Enabled = false, Speed = 180 }
@@ -507,7 +503,7 @@ local spinBindBtn = FuckYouLib.createContentButton(tabFrames.Character, "Spin Ke
             if conn then conn:Disconnect() end
         end
     end)
-    .delay(5, function()
+    delay(5, function()
         if conn and conn.Connected then
             conn:Disconnect()
             spinBindBtn.Text = "Spin Key: [" .. (CharacterKeybinds.SpinToggle and CharacterKeybinds.SpinToggle.Name or "None") .. "]"
@@ -516,7 +512,7 @@ local spinBindBtn = FuckYouLib.createContentButton(tabFrames.Character, "Spin Ke
 end)
 
 LocalPlayer.CharacterAdded:Connect(function()
-    .wait(0.1)
+    task.wait(0.1)
     applyCharStats()
 end)
 
@@ -690,12 +686,12 @@ Players.PlayerRemoving:Connect(function(plr)
     refreshPlayersList()
 end)
 Players.PlayerAdded:Connect(function()
-    .wait(1)
+    task.wait(1)
     refreshPlayersList()
 end)
 local function hookPlayerChar(plr)
     plr.CharacterAdded:Connect(function(char)
-        .wait(0.1)
+        task.wait(0.1)
         if markedPlayers[plr] then applyMark(plr, true) end
         if spectateTarget == plr then
             local h = char:FindFirstChildOfClass("Humanoid")
@@ -706,9 +702,9 @@ end
 for _, plr in ipairs(Players:GetPlayers()) do hookPlayerChar(plr) end
 Players.PlayerAdded:Connect(hookPlayerChar)
 
-.spawn(function()
+spawn(function()
     while true do
-        .wait(0.5)
+        wait(0.5)
         if spectateTarget then
             local h = spectateTarget.Character and spectateTarget.Character:FindFirstChildOfClass("Humanoid")
             if h and h.Health > 0 then
@@ -762,7 +758,7 @@ end
 
 local aspectConn = nil
 local function updateAspectLoop()
-    if aspectConn then aspectConn:Disconnect() aspectConn = nil end
+    if aspectConn then aspectConn:Disconnect(); aspectConn = nil end
     if VisualSettings.AspectH >= 100 and VisualSettings.AspectV >= 100 then return end
     aspectConn = RunService.RenderStepped:Connect(function()
         local cam = workspace.CurrentCamera
@@ -938,7 +934,7 @@ extraSlider(tabFrames.Visuals, "Contrast", 0, 200, 0, 100, function() return Vis
 
 LocalPlayer.CharacterAdded:Connect(function(char)
     if TrailSettings.Enabled then
-        .wait(0.1)
+        task.wait(0.1)
         buildTrails(char)
     end
 end)
@@ -1112,7 +1108,7 @@ end
 local function rejoin()
     FuckYouLib.notify("Rejoin", "Rejoining...")
     pcall(function() TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LocalPlayer) end)
-    .wait(0.5)
+    task.wait(0.5)
     pcall(function() TeleportService:Teleport(game.PlaceId, LocalPlayer) end)
 end
 
@@ -1148,7 +1144,7 @@ local sesPlayL = FuckYouLib.createLabel(tabFrames.Server, "Playtime: 00:00:00")
 local sesDeathsL = FuckYouLib.createLabel(tabFrames.Server, "Deaths: 0")
 local sesWalkL = FuckYouLib.createLabel(tabFrames.Server, "Walked: 0 studs")
 
-.spawn(function()
+spawn(function()
     local ok, info = pcall(function() return Marketplace:GetProductInfo(game.PlaceId) end)
     if ok and info and info.Name then
         srvPlaceL.Text = "Place: " .. game.PlaceId .. " (" .. info.Name .. ")"
@@ -1177,9 +1173,9 @@ RunService.Heartbeat:Connect(function()
     end
 end)
 
-.spawn(function()
+spawn(function()
     while true do
-        .wait(1)
+        wait(1)
         pcall(function()
             srvUsersL.Text = "Users: " .. #Players:GetPlayers() .. "/" .. Players.MaxPlayers
             srvPingL.Text = "Ping: " .. math.floor(StatsService.PerformanceStats.Ping:GetValue()) .. " ms"
@@ -1191,7 +1187,6 @@ end)
     end
 end)
 
--- Регистрация провайдера Key List
 FuckYouLib.registerKeyListProvider("EmilyUi", function()
     local rows = {}
     if CharSettings.Speed ~= 16 then table.insert(rows, {"SPEED", tostring(CharSettings.Speed)}) end
