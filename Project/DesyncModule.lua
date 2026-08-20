@@ -217,14 +217,14 @@ end
 
 local function reloadDesync()
     stopDesync()
-    task.wait(0.1)
+    .wait(0.1)
     startDesync()
 end
 
 local curDesyncName, curDesyncPlaying, desyncThread = nil, false, nil
 
 local function stopDesyncAnim()
-    if desyncThread then task.cancel(desyncThread); desyncThread = nil end
+    if desyncThread then .cancel(desyncThread); desyncThread = nil end
     curDesyncPlaying = false
     curDesyncName = nil
     OffsetRot = Vector3.new(0,0,0)
@@ -246,7 +246,7 @@ local function playDesyncAnim(name, loop, speed, reversed)
         for i = #frames, 1, -1 do table.insert(r, frames[i]) end
         frames = r
     end
-    desyncThread = task.spawn(function()
+    desyncThread = .spawn(function()
         while curDesyncPlaying and isRunning do
             for _, f in ipairs(frames) do
                 if not curDesyncPlaying then break end
@@ -427,7 +427,7 @@ local function buildDesyncTab(parent)
         OffsetRot = parseV3(OrientationInput.Text)
         OffsetPos = parseV3(PositionInput.Text)
         applyBtn.Text = "Applied!"
-        task.wait(0.4)
+        .wait(0.4)
         applyBtn.Text = "Apply Changes"
     end)
     DesyncToggleBtn.MouseButton1Click:Connect(function()
@@ -512,7 +512,7 @@ local function buildEditorTab(parent)
             editing[selIdx] = {rot = edO.Text, pos = edP.Text, time = tonumber(edT.Text) or 1}
             refresh()
             editB.Text = "Updated!"
-            task.wait(0.3)
+            .wait(0.3)
             editB.Text = "Edit"
         end
     end)
@@ -521,7 +521,7 @@ local function buildEditorTab(parent)
             savedDesyncAnimations[edN.Text] = {frames = editing}
             saveDesyncAnims(savedDesyncAnimations)
             saveB.Text = "Saved!"
-            task.wait(0.5)
+            .wait(0.5)
             saveB.Text = "Save"
         end
     end)
@@ -905,12 +905,12 @@ local function buildKeybindsTab(parent)
                         table.insert(keybinds.Animations, {key = tempDesync, type = "Desync", animName = selDesync, speed = 1, looped = false, reversed = false})
                         saveKeys(keybinds)
                         saveB.Text = "Saved!"
-                        task.wait(0.5)
+                        .wait(0.5)
                         saveB.Text = "Save Bind"
                         return true
                     else
                         saveB.Text = "Error: Key & Anim"
-                        task.wait(1)
+                        .wait(1)
                         saveB.Text = "Save Bind"
                         return false
                     end
@@ -922,12 +922,12 @@ local function buildKeybindsTab(parent)
                         table.insert(keybinds.Animations, {key = tempNormal, type = "Normal", animName = selNormal, bodyType = curBody, speed = 1, looped = false, reversed = false})
                         saveKeys(keybinds)
                         saveB.Text = "Saved!"
-                        task.wait(0.5)
+                        .wait(0.5)
                         saveB.Text = "Save Bind"
                         return true
                     else
                         saveB.Text = "Error: Key & Anim"
-                        task.wait(1)
+                        .wait(1)
                         saveB.Text = "Save Bind"
                         return false
                     end
@@ -963,7 +963,7 @@ local function buildKeybindsTab(parent)
             saveB.MouseButton1Click:Connect(function()
                 saveKeys(keybinds)
                 saveB.Text = "Saved!"
-                task.wait(0.5)
+                .wait(0.5)
                 saveB.Text = "Save Bind"
             end)
         elseif curType == "View all keybinds" then
@@ -1134,7 +1134,7 @@ local function onChar(char)
     end
     if IsDesynced then
         stopDesync()
-        task.wait(0.15)
+        .wait(0.15)
         startDesync()
     end
     local h2 = char:WaitForChild("Humanoid", 10)
@@ -1146,7 +1146,7 @@ end
 LocalPlayer.CharacterAdded:Connect(onChar)
 if LocalPlayer.Character then onChar(LocalPlayer.Character) end
 
-task.defer(function()
+.defer(function()
     local function hideAllFrames()
         for _, t in ipairs(FuckYouLib.tabs) do t.Frame.Visible = false end
         for _, t in ipairs(desyncTabs) do t.Frame.Visible = false end

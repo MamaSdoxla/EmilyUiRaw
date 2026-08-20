@@ -47,7 +47,7 @@ FuckYouLib.uiColor_ToggleOnText = Color3.fromRGB(100, 255, 100)
 FuckYouLib.uiColor_ToggleOffText = Color3.fromRGB(255, 100, 100)
 FuckYouLib.uiCollapsed = false
 
---// Система уведомлений (без task)
+--// Система уведомлений (без )
 function FuckYouLib.notify(title, text)
     spawn(function()
         local notificationData = {

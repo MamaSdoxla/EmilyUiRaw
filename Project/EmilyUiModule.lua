@@ -497,7 +497,7 @@ local spinBindBtn = FuckYouLib.createContentButton(tabFrames.Character, "Spin Ke
             if conn then conn:Disconnect() end
         end
     end)
-    task.delay(5, function()
+    .delay(5, function()
         if conn and conn.Connected then
             conn:Disconnect()
             spinBindBtn.Text = "Spin Key: [" .. (CharacterKeybinds.SpinToggle and CharacterKeybinds.SpinToggle.Name or "None") .. "]"
@@ -506,7 +506,7 @@ local spinBindBtn = FuckYouLib.createContentButton(tabFrames.Character, "Spin Ke
 end)
 
 LocalPlayer.CharacterAdded:Connect(function()
-    task.wait(0.1)
+    .wait(0.1)
     applyCharStats()
 end)
 
@@ -680,12 +680,12 @@ Players.PlayerRemoving:Connect(function(plr)
     refreshPlayersList()
 end)
 Players.PlayerAdded:Connect(function()
-    task.wait(1)
+    .wait(1)
     refreshPlayersList()
 end)
 local function hookPlayerChar(plr)
     plr.CharacterAdded:Connect(function(char)
-        task.wait(0.1)
+        .wait(0.1)
         if markedPlayers[plr] then applyMark(plr, true) end
         if spectateTarget == plr then
             local h = char:FindFirstChildOfClass("Humanoid")
@@ -696,9 +696,9 @@ end
 for _, plr in ipairs(Players:GetPlayers()) do hookPlayerChar(plr) end
 Players.PlayerAdded:Connect(hookPlayerChar)
 
-task.spawn(function()
+.spawn(function()
     while true do
-        task.wait(0.5)
+        .wait(0.5)
         if spectateTarget then
             local h = spectateTarget.Character and spectateTarget.Character:FindFirstChildOfClass("Humanoid")
             if h and h.Health > 0 then
@@ -928,7 +928,7 @@ extraSlider(tabFrames.Visuals, "Contrast", 0, 200, 0, 100, function() return Vis
 
 LocalPlayer.CharacterAdded:Connect(function(char)
     if TrailSettings.Enabled then
-        task.wait(0.1)
+        .wait(0.1)
         buildTrails(char)
     end
 end)
@@ -1102,7 +1102,7 @@ end
 local function rejoin()
     FuckYouLib.notify("Rejoin", "Rejoining...")
     pcall(function() TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LocalPlayer) end)
-    task.wait(0.5)
+    .wait(0.5)
     pcall(function() TeleportService:Teleport(game.PlaceId, LocalPlayer) end)
 end
 
@@ -1138,7 +1138,7 @@ local sesPlayL = FuckYouLib.createLabel(tabFrames.Server, "Playtime: 00:00:00")
 local sesDeathsL = FuckYouLib.createLabel(tabFrames.Server, "Deaths: 0")
 local sesWalkL = FuckYouLib.createLabel(tabFrames.Server, "Walked: 0 studs")
 
-task.spawn(function()
+.spawn(function()
     local ok, info = pcall(function() return Marketplace:GetProductInfo(game.PlaceId) end)
     if ok and info and info.Name then
         srvPlaceL.Text = "Place: " .. game.PlaceId .. " (" .. info.Name .. ")"
@@ -1167,9 +1167,9 @@ RunService.Heartbeat:Connect(function()
     end
 end)
 
-task.spawn(function()
+.spawn(function()
     while true do
-        task.wait(1)
+        .wait(1)
         pcall(function()
             srvUsersL.Text = "Users: " .. #Players:GetPlayers() .. "/" .. Players.MaxPlayers
             srvPingL.Text = "Ping: " .. math.floor(StatsService.PerformanceStats.Ping:GetValue()) .. " ms"

@@ -294,7 +294,7 @@ end
 local function hookESPCharacter(player)
     player.CharacterAdded:Connect(function()
         if ESPSettings.Enabled then
-            task.wait(0.5)
+            .wait(0.5)
             removeESPForPlayer(player)
             createESP(player)
             updateESP()
@@ -858,7 +858,7 @@ local function mkBindRow(parent, labelText, y, get, set)
             waiting = false
             if connection then connection:Disconnect() end
         end)
-        task.delay(5, function()
+        .delay(5, function()
             if waiting then
                 waiting = false
                 refresh()
@@ -944,7 +944,7 @@ local function buildESPTab(parent)
     refreshBtn.MouseButton1Click:Connect(function()
         setESPEnabled(ESPSettings.Enabled)
         refreshBtn.Text = "Refreshed!"
-        task.delay(0.5, function() refreshBtn.Text = "Refresh ESP (Update Players)" end)
+        .delay(0.5, function() refreshBtn.Text = "Refresh ESP (Update Players)" end)
     end)
     y = y + 34
     mkToggleRow(inner, "Show Name", y, function() return ESPSettings.ShowName end, function(v) ESPSettings.ShowName = v end)
@@ -1208,7 +1208,7 @@ FuckYouLib.updateTabButtonsTheme = function()
     end
 end
 
-task.defer(function()
+.defer(function()
     local function hideAllFrames()
         for _, t in ipairs(FuckYouLib.tabs) do if t.Frame then t.Frame.Visible = false end end
         for _, t in ipairs(FuckYouLib.desyncTabs or {}) do if t.Frame then t.Frame.Visible = false end end

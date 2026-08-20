@@ -218,8 +218,8 @@ local currentCategory = "Default"
 local MusicKeybinds = { Toggle = "" }
 
 local function runTimelineLoop()
-    if timelineLoop then task.cancel(timelineLoop) end
-    timelineLoop = task.spawn(function()
+    if timelineLoop then .cancel(timelineLoop) end
+    timelineLoop = .spawn(function()
         while ScriptActive do
             if ToggleState and musicSound and musicSound.Parent and musicSound.IsPlaying and not isInteractingWithSlider then
                 local tracks = DataStructure.Categories[currentCategory] or {}
@@ -235,7 +235,7 @@ local function runTimelineLoop()
                     timePosLabel.Text = string.format("%02i:%02i", math.floor(musicSound.TimePosition/60)%60, math.floor(musicSound.TimePosition)%60)
                 end
             end
-            task.wait(0.3)
+            .wait(0.3)
         end
     end)
 end
@@ -257,9 +257,9 @@ RunService:BindToRenderStep("musicVisualRender", 0, function()
     end
 end)
 
-task.spawn(function()
+.spawn(function()
     while ScriptActive do
-        task.wait()
+        .wait()
         if ToggleState then
             local root = getRoot()
             if root then
@@ -302,7 +302,7 @@ end)
 
 LocalPlayer.CharacterAdded:Connect(function()
     if ToggleState then
-        task.wait(0.1)
+        .wait(0.1)
         updatePartsParent()
         rebuildParts(Settings.Parts)
     end
@@ -404,7 +404,7 @@ local function buildMusic(parent)
         if isChecking then return end
         isChecking = true
         checkB.Text = "PREPARING..."
-        task.spawn(function()
+        .spawn(function()
             local seen, list = {}, {}
             for _, catData in pairs(DataStructure.Categories) do
                 for id, _ in pairs(catData) do
@@ -424,11 +424,11 @@ local function buildMusic(parent)
                 local el = 0
                 while el < 5 do
                     if temp.TimeLength > 0 then ok = true; break end
-                    task.wait(0.25); el = el + 0.25
+                    .wait(0.25); el = el + 0.25
                 end
                 temp:Stop(); temp:Destroy()
                 if ok then brokenIds[id] = nil else brokenIds[id] = true; broken = broken + 1 end
-                task.wait(0.1)
+                .wait(0.1)
             end
             updateMusicList()
             checkB.Text = "CHECK"
@@ -791,10 +791,10 @@ local function buildGrabber(parent)
                 end
             end)
         end)
-        if scanCycleThread then task.cancel(scanCycleThread) end
-        scanCycleThread = task.spawn(function()
+        if scanCycleThread then .cancel(scanCycleThread) end
+        scanCycleThread = .spawn(function()
             while isGrabberScanning do
-                task.wait(10)
+                .wait(10)
                 if not isGrabberScanning then break end
                 fullSweep()
             end
@@ -802,7 +802,7 @@ local function buildGrabber(parent)
     end
     local function stopSmartScanning()
         if scanConnection then scanConnection:Disconnect(); scanConnection = nil end
-        if scanCycleThread then task.cancel(scanCycleThread); scanCycleThread = nil end
+        if scanCycleThread then .cancel(scanCycleThread); scanCycleThread = nil end
     end
 
     gStartB.MouseButton1Click:Connect(function()
@@ -831,9 +831,9 @@ local function buildGrabber(parent)
         local ScanStatus = FuckYouLib.create("TextLabel", {Parent = ScanGui, Position = UDim2.new(0,0,0,30), Size = UDim2.new(1,0,0,20), BackgroundTransparency = 1, Text = "Initializing...", TextColor3 = Color3.fromRGB(160,160,160), TextSize = 12, Font = FONT, ZIndex = 21})
         local BarBack = FuckYouLib.create("Frame", {Parent = ScanGui, Position = UDim2.new(0.05,0,0,60), Size = UDim2.new(0.9,0,0,10), BackgroundColor3 = Color3.fromRGB(40,40,40), BorderSizePixel = 0, ZIndex = 21})
         local BarFill = FuckYouLib.create("Frame", {Parent = BarBack, Size = UDim2.new(0,0,1,0), BackgroundColor3 = Color3.fromRGB(100,200,100), BorderSizePixel = 0, ZIndex = 22})
-        task.spawn(function()
+        .spawn(function()
             pcall(function()
-                task.wait(0.2)
+                .wait(0.2)
                 ScanStatus.Text = "Removing duplicates..."
                 local uniq, seen = {}, {}
                 for _, id in ipairs(grabbedIds) do
@@ -842,7 +842,7 @@ local function buildGrabber(parent)
                 end
                 grabbedIds = uniq
                 ScanStatus.Text = "Cross-referencing with Music library..."
-                task.wait(0.2)
+                .wait(0.2)
                 local musicIdSet = {}
                 for _, catData in pairs(DataStructure.Categories) do
                     for id, _ in pairs(catData) do musicIdSet[tostring(id)] = true end
@@ -866,17 +866,17 @@ local function buildGrabber(parent)
                     local el = 0
                     while el < 5 do
                         if temp.TimeLength > 0 then table.insert(valid, id); break end
-                        task.wait(0.25); el = el + 0.25
+                        .wait(0.25); el = el + 0.25
                     end
                     temp:Stop(); temp:Destroy()
-                    task.wait(0.2)
+                    .wait(0.2)
                 end
                 grabbedIds = valid
                 saveGrabber(); updateGrabberList()
                 selectedGrabbedId = ""
                 ScanStatus.Text = string.format("Complete! %d / %d IDs are valid.", #valid, total)
                 BarFill.Size = UDim2.new(1, 0, 1, 0)
-                task.wait(2)
+                .wait(2)
             end)
             ScanGui:Destroy()
             isScanningLogicRunning = false
@@ -945,7 +945,7 @@ FuckYouLib.updateTabButtonsTheme = function()
     end
 end
 
-task.defer(function()
+.defer(function()
     local function hideAllFrames()
         for _, t in ipairs(FuckYouLib.tabs) do t.Frame.Visible = false end
         for _, t in ipairs(FuckYouLib.desyncTabs or {}) do t.Frame.Visible = false end

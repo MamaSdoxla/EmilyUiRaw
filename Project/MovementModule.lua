@@ -1406,7 +1406,7 @@ ScreenGui.Destroying:Connect(function()
 end)
 
 -- Tab switching integration
-task.defer(function()
+.defer(function()
     local function hideAllFrames()
         for _, t in ipairs(FuckYouLib.tabs) do if t.Frame then t.Frame.Visible = false end end
         for _, t in ipairs(FuckYouLib.desyncTabs or {}) do if t.Frame then t.Frame.Visible = false end end
