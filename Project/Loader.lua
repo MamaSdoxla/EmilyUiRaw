@@ -18,7 +18,7 @@ local function loadModule(url)
 end
 
 --// Базовый URL (замените на свой репозиторий)
-local BASE_URL = "https://raw.githubusercontent.com/MamaSdoxla/EmilyUiRaw/refs/heads/main/Project/"
+   local BASE_URL = "https://raw.githubusercontent.com/MamaSdoxla/EmilyUiRaw/refs/heads/main/Project/"
 
 --// 1. Загружаем библиотеку
 local Library = loadModule(BASE_URL .. "FuckYouLibrary.lua")
