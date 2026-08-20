@@ -1,6 +1,4 @@
 --// Loader.lua — Главный загрузчик FuckYou UI
---// Загружает все модули в правильном порядке
-
 local function loadModule(url)
     local success, source = pcall(function()
         return game:HttpGet(url)
@@ -17,8 +15,8 @@ local function loadModule(url)
     return fn()
 end
 
---// Базовый URL (замените на свой репозиторий)
-   local BASE_URL = "https://raw.githubusercontent.com/MamaSdoxla/EmilyUiRaw/refs/heads/main/Project/"
+--// Базовый URL (ИСПРАВЛЕНО: добавлен слэш в конце)
+local BASE_URL = "https://raw.githubusercontent.com/MamaSdoxla/EmilyUiRaw/refs/heads/main/Project/"
 
 --// 1. Загружаем библиотеку
 local Library = loadModule(BASE_URL .. "FuckYouLibrary.lua")
@@ -308,8 +306,7 @@ task.spawn(function()
     end
 end)
 
---// 15. Key List Module (встроен в библиотеку)
--- Инициализируется в конце, когда все провайдеры зарегистрированы
+--// 15. Key List Module
 local KeyListAPI = (function()
     local KL = {
         Enabled = true,
