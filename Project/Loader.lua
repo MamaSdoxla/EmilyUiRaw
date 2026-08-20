@@ -1,5 +1,5 @@
--- Полифил для task
-if not _G.task then
+-- Усиленный полифил для task
+if not task then
     _G.task = {
         spawn = function(f) return coroutine.wrap(f)() end,
         wait = function(t) return wait(t) end,
@@ -7,6 +7,9 @@ if not _G.task then
         defer = function(f) return spawn(f) end,
         cancel = function() end,
     }
+    -- Принудительно назначаем в глобальную таблицу (для некоторых экзекуторов)
+    getfenv().task = _G.task
+    setfenv(0, getfenv())
 end
 
 -- Загрузка модулей
