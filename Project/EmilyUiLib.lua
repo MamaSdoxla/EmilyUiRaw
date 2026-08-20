@@ -28,7 +28,6 @@ local beta = false
 local themeElements = { MainWindow={}, TopBars={}, SideBars={}, Texts={}, Buttons={}, TextBoxes={}, FillBars={}, CustomButtons={} }
 local toggleRegistry = {}
 
---// Утилиты (теперь доступны через Library)
 function Library.create(className, properties)
     local inst = Instance.new(className)
     for k, v in pairs(properties or {}) do inst[k] = v end
@@ -49,7 +48,6 @@ local function customAsset(path)
     return nil
 end
 
---// Уведомления
 function Library.notify(title, text)
     task.spawn(function()
         local notificationData = { Title = title, Text = text, Duration = 15 }
@@ -91,7 +89,6 @@ function Library.CreateWindow(title)
     
     local containment = Library.create("Frame", {Name = "Containment", Parent = window, Position = UDim2.new(0, 170, 0, 45), Size = UDim2.new(1, -170, 1, -45), BackgroundTransparency = 1, BorderSizePixel = 0})
     
-    -- Drag
     local dragging, dragInput, dragStart, startPosition
     topBar.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
@@ -160,7 +157,7 @@ function Library.CreateToggle(parent, labelText, initial, callback)
     return obj
 end
 
-function Library.CreateDropdown(parent, labelText, options, getCurrent, onselect)
+function Library.CreateDropdown(parent, labelText, getOptions, getCurrent, onselect)
     local container = Library.create("Frame", {Size = UDim2.new(1, 0, 0, 36), BackgroundTransparency = 1, Parent = parent})
     Library.create("TextLabel", {Size = UDim2.new(0.45, 0, 1, 0), BackgroundTransparency = 1, Text = labelText, TextColor3 = uiColor_TextColor, TextSize = 13, Font = FONT, TextXAlignment = Enum.TextXAlignment.Left, Parent = container})
     local btn = Library.CreateButton(container, labelText .. ": " .. getCurrent(), function() end)
@@ -171,15 +168,42 @@ function Library.CreateDropdown(parent, labelText, options, getCurrent, onselect
     btn.MouseButton1Click:Connect(function()
         if list.Visible then list.Visible = false; return end
         for _, ch in ipairs(list:GetChildren()) do if ch:IsA("TextButton") then ch:Destroy() end end
-        for _, opt in ipairs(options) do
+        local opts = getOptions()
+        for _, opt in ipairs(opts) do
             local ob = Library.CreateButton(list, opt, function() onselect(opt); list.Visible = false; btn.Text = labelText .. ": " .. getCurrent() end)
             ob.Size = UDim2.new(1, -4, 0, 24); ob.ZIndex = 26; ob.TextSize = 12
         end
-        list.CanvasSize = UDim2.new(0, 0, 0, #options * 26 + 4); list.Visible = true
+        list.CanvasSize = UDim2.new(0, 0, 0, #opts * 26 + 4); list.Visible = true
     end)
 end
 
---// Конфиги
+function Library.CreateSlider(parent, labelText, min, max, getval, onval, fmt)
+    local container = Library.create("Frame", {Size = UDim2.new(1, 0, 0, 36), BackgroundTransparency = 1, Parent = parent})
+    Library.create("TextLabel", {Size = UDim2.new(0.45, 0, 1, 0), BackgroundTransparency = 1, Text = labelText, TextColor3 = uiColor_TextColor, TextSize = 13, Font = FONT, TextXAlignment = Enum.TextXAlignment.Left, Parent = container})
+    local valLabel = Library.create("TextLabel", {Size = UDim2.new(0.5, 0, 0, 14), Position = UDim2.new(0.48, 0, 0.05, 0), BackgroundTransparency = 1, Text = fmt(getval()), TextColor3 = uiColor_TextColor, TextSize = 13, Font = FONT, TextXAlignment = Enum.TextXAlignment.Right, Parent = container})
+    local track = Library.create("TextButton", {Size = UDim2.new(0.5, 0, 0, 10), Position = UDim2.new(0.48, 0, 0.55, 0), BackgroundColor3 = uiColor_TextBoxColor, BorderColor3 = COL_BORDER, Text = "", Parent = container})
+    table.insert(themeElements.TextBoxes, track)
+    local fill = Library.create("Frame", {Size = UDim2.new((getval() - min) / (max - min), 0, 1, 0), BackgroundColor3 = uiColor_TextColor, BorderSizePixel = 0, Parent = track})
+    table.insert(themeElements.FillBars, fill)
+    local dragging = false
+    local function setFromX(x)
+        local rel = math.clamp((x - track.AbsolutePosition.X) / track.AbsoluteSize.X, 0, 1)
+        local v = math.floor(min + (max - min) * rel + 0.5)
+        onval(v)
+        fill.Size = UDim2.new((v - min) / (max - min), 0, 1, 0)
+        valLabel.Text = fmt(v)
+        Library.autoSaveConfig(true)
+    end
+    track.MouseButton1Down:Connect(function(x) dragging = true; setFromX(x) end)
+    game:GetService("UserInputService").InputChanged:Connect(function(input)
+        if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then setFromX(input.Position.X) end
+    end)
+    game:GetService("UserInputService").InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end
+    end)
+    return container
+end
+
 local configPath = "EmilyUi/Config.json"
 local lastAutoConfigSave = 0
 local configSaveListeners = {}
@@ -226,7 +250,6 @@ function Library.autoSaveConfig(force, extraData)
     runConfigSaveListeners()
 end
 
---// Тема
 function Library.applyTheme()
     local trans = 1 - uiGuiOpacity
     local function applyList(key, fn)
@@ -252,7 +275,10 @@ function Library.applyTheme()
     end
 end
 
---// Система ключей
+local function updateBlur()
+    -- stub, will be overridden or handled by main script
+end
+
 local SECRET_KEY = "XenoMeowEmilyUi11037"
 local b64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
 local function base64_decode(data)
@@ -360,7 +386,6 @@ function Library.initKeySystem(window, topBar, sideBar, menuInsided, containment
     task.spawn(checkKeySystem)
 end
 
--- KeyList Overlay
 local keyListProviders = {}
 function Library.registerKeyListProvider(group, fn) keyListProviders[group] = fn end
 local KL = { Enabled = true, ShowEmily = true, ShowDesync = true, ShowMusic = true, ShowAim = true, ShowMovement = true }
@@ -415,5 +440,51 @@ function Library.refreshKL(force)
     if force or snap ~= lastSnap then lastSnap = snap; rebuildKL() end
 end
 task.spawn(function() while true do task.wait(0.5); pcall(Library.refreshKL) end end)
+
+--// Экспорт настроек для внешних модулей
+function Library.getColor(name)
+    if name == "MainWindow" then return uiColor_MainWindow
+    elseif name == "TopBar" then return uiColor_TopBar
+    elseif name == "SideBar" then return uiColor_SideBar
+    elseif name == "Text" then return uiColor_TextColor
+    elseif name == "Button" then return uiColor_ButtonColor
+    elseif name == "TextBox" then return uiColor_TextBoxColor
+    elseif name == "ToggleOn" then return uiColor_ToggleOnText
+    elseif name == "ToggleOff" then return uiColor_ToggleOffText
+    end
+end
+function Library.setColor(name, color)
+    if name == "MainWindow" then uiColor_MainWindow = color
+    elseif name == "TopBar" then uiColor_TopBar = color
+    elseif name == "SideBar" then uiColor_SideBar = color
+    elseif name == "Text" then uiColor_TextColor = color
+    elseif name == "Button" then uiColor_ButtonColor = color
+    elseif name == "TextBox" then uiColor_TextBoxColor = color
+    elseif name == "ToggleOn" then uiColor_ToggleOnText = color
+    elseif name == "ToggleOff" then uiColor_ToggleOffText = color
+    end
+end
+function Library.getToggleKey() return currentToggleKey end
+function Library.setToggleKey(key) currentToggleKey = key end
+function Library.getBackgroundFile() return uiBackgroundFile end
+function Library.setBackgroundFile(file) uiBackgroundFile = file end
+function Library.getFitMode() return uiFitMode end
+function Library.setFitMode(mode) uiFitMode = mode end
+function Library.getGuiOpacity() return uiGuiOpacity end
+function Library.setGuiOpacity(op) uiGuiOpacity = op end
+function Library.getImageOpacity() return uiImageOpacity end
+function Library.setImageOpacity(op) uiImageOpacity = op end
+function Library.getBlurSize() return uiBlurSize end
+function Library.setBlurSize(size) uiBlurSize = size; if typeof(updateBlur) == "function" then updateBlur() end end
+
+local function getBackgroundFiles()
+    local out = {}
+    if listfiles then
+        local ok, files = pcall(function() return listfiles("EmilyUi/FuckYou/Background") end)
+        if ok and files then for _, p in ipairs(files) do local name = p:match("([^/\\]+)$"); local ext = name and name:lower():match("%.(%w+)$"); if ext == "png" or ext == "jpg" or ext == "jpeg" or ext == "webp" then table.insert(out, name) end end; table.sort(out) end
+    end
+    return out
+end
+Library.getBackgroundFiles = getBackgroundFiles
 
 return Library

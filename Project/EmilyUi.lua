@@ -7,6 +7,7 @@ return function(Library)
     local RunService = game:GetService("RunService")
     local Marketplace = game:GetService("MarketplaceService")
     local TeleportService = game:GetService("TeleportService")
+    local FONT = Enum.Font.SpecialElite
 
     local window, topBar, sideBar, menuInsided, containment = Library.CreateWindow("Fuck you! v1.2")
     
@@ -227,51 +228,51 @@ return function(Library)
 
     -- Settings
     Library.CreateSection(tabSettings, "UI Customization")
-    local keyBindBtn = Library.CreateButton(tabSettings, "Menu Toggle Key: P", function()
-        keyBindBtn.Text = "...Press any Key..."
-        local conn; conn = game:GetService("UserInputService").InputBegan:Connect(function(input)
-            if input.UserInputType == Enum.UserInputType.Keyboard then
-                currentToggleKey = input.KeyCode; keyBindBtn.Text = "Menu Toggle Key: " .. input.KeyCode.Name
-                Library.autoSaveConfig(true); conn:Disconnect()
-            end
-        end)
-    end)
     
     local function parseRGB(str) local r,g,b = string.match(str, "(%d+)%s*,%s*(%d+)%s*,%s*(%d+)"); return r and Color3.fromRGB(tonumber(r), tonumber(g), tonumber(b)) or nil end
+    local function formatColor(c) return math.floor(c.R*255)..", "..math.floor(c.G*255)..", "..math.floor(c.B*255) end
+    
     local colorSettings = {
-        { "Main Window Color: ", "12, 12, 12", function(c) uiColor_MainWindow = c end},
-        { "Top Bar Color: ", "12, 12, 12", function(c) uiColor_TopBar = c end},
-        { "Side Bar Color: ", "12, 12, 12", function(c) uiColor_SideBar = c end},
-        { "Text Color: ", "139, 135, 127", function(c) uiColor_TextColor = c end},
-        { "Button Color: ", "12, 12, 12", function(c) uiColor_ButtonColor = c end},
-        { "TextBox Background Color: ", "18, 18, 18", function(c) uiColor_TextBoxColor = c end},
-        { "Toggle ON Color: ", "100, 255, 100", function(c) uiColor_ToggleOnText = c end},
-        { "Toggle OFF Color: ", "255, 100, 100", function(c) uiColor_ToggleOffText = c end}
+        { "Main Window Color: ", formatColor(Library.getColor("MainWindow")), function(c) Library.setColor("MainWindow", c); Library.applyTheme(); Library.autoSaveConfig(true) end},
+        { "Top Bar Color: ", formatColor(Library.getColor("TopBar")), function(c) Library.setColor("TopBar", c); Library.applyTheme(); Library.autoSaveConfig(true) end},
+        { "Side Bar Color: ", formatColor(Library.getColor("SideBar")), function(c) Library.setColor("SideBar", c); Library.applyTheme(); Library.autoSaveConfig(true) end},
+        { "Text Color: ", formatColor(Library.getColor("Text")), function(c) Library.setColor("Text", c); Library.applyTheme(); Library.autoSaveConfig(true) end},
+        { "Button Color: ", formatColor(Library.getColor("Button")), function(c) Library.setColor("Button", c); Library.applyTheme(); Library.autoSaveConfig(true) end},
+        { "TextBox Background Color: ", formatColor(Library.getColor("TextBox")), function(c) Library.setColor("TextBox", c); Library.applyTheme(); Library.autoSaveConfig(true) end},
+        { "Toggle ON Color: ", formatColor(Library.getColor("ToggleOn")), function(c) Library.setColor("ToggleOn", c); Library.applyTheme(); Library.autoSaveConfig(true) end},
+        { "Toggle OFF Color: ", formatColor(Library.getColor("ToggleOff")), function(c) Library.setColor("ToggleOff", c); Library.applyTheme(); Library.autoSaveConfig(true) end}
     }
     for _, cfg in ipairs(colorSettings) do
         local container = create("Frame", {Size = UDim2.new(1, 0, 0, 36), BackgroundTransparency = 1, Parent = tabSettings})
-        create("TextLabel", {Size = UDim2.new(0.45, 0, 1, 0), BackgroundTransparency = 1, Text = cfg[1], TextColor3 = uiColor_TextColor, TextSize = 13, Font = FONT, TextXAlignment = Enum.TextXAlignment.Left, Parent = container})
+        create("TextLabel", {Size = UDim2.new(0.45, 0, 1, 0), BackgroundTransparency = 1, Text = cfg[1], TextColor3 = Library.getColor("Text"), TextSize = 13, Font = FONT, TextXAlignment = Enum.TextXAlignment.Left, Parent = container})
         local box = Library.CreateTextBox(container, cfg[2], Enum.Font.Code)
         box.Size = UDim2.new(0.5, 0, 0.8, 0); box.Position = UDim2.new(0.48, 0, 0.1, 0); box.TextSize = 12
         box.FocusLost:Connect(function(enterPressed)
             if enterPressed or box.Text ~= "" then
                 local color = parseRGB(box.Text)
-                if color then cfg[3](color); Library.applyTheme(); Library.autoSaveConfig(true)
+                if color then cfg[3](color); box.Text = formatColor(color)
                 else box.Text = "Invalid format!" end
             end
         end)
     end
 
     Library.CreateSection(tabSettings, "Background & Window")
-    local function getBackgroundFiles()
-        local out = {}
-        if listfiles then
-            local ok, files = pcall(function() return listfiles("EmilyUi/FuckYou/Background") end)
-            if ok and files then for _, p in ipairs(files) do local name = p:match("([^/\\]+)$"); local ext = name and name:lower():match("%.(%w+)$"); if ext == "png" or ext == "jpg" or ext == "jpeg" or ext == "webp" then table.insert(out, name) end end; table.sort(out) end
-        end
-        return out
-    end
-    Library.CreateDropdown(tabSettings, "Background Image", function() local o = {"None"}; for _, f in ipairs(getBackgroundFiles()) do table.insert(o, f) end; return o end, function() return uiBackgroundFile == "" and "None" or uiBackgroundFile end, function(opt) uiBackgroundFile = (opt == "None") and "" or opt; Library.applyTheme() end)
+    local keyBindBtn = Library.CreateButton(tabSettings, "Menu Toggle Key: " .. Library.getToggleKey().Name, function()
+        keyBindBtn.Text = "...Press any Key..."
+        local conn; conn = game:GetService("UserInputService").InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.Keyboard then
+                Library.setToggleKey(input.KeyCode); keyBindBtn.Text = "Menu Toggle Key: " .. input.KeyCode.Name
+                Library.autoSaveConfig(true); conn:Disconnect()
+            end
+        end)
+    end)
+
+    Library.CreateDropdown(tabSettings, "Background Image", function() local o = {"None"}; for _, f in ipairs(Library.getBackgroundFiles()) do table.insert(o, f) end; return o end, function() return Library.getBackgroundFile() == "" and "None" or Library.getBackgroundFile() end, function(opt) Library.setBackgroundFile((opt == "None") and "" or opt); Library.applyTheme() end)
+    
+    Library.CreateSlider(tabSettings, "Image Opacity", 0, 100, function() return math.floor(Library.getImageOpacity() * 100 + 0.5) end, function(v) Library.setImageOpacity(v / 100); Library.applyTheme() end, function(v) return v .. "%" end)
+    Library.CreateSlider(tabSettings, "Blur", 0, 24, function() return Library.getBlurSize() end, function(v) Library.setBlurSize(v); Library.applyTheme() end, function(v) return v .. "px" end)
+    Library.CreateDropdown(tabSettings, "Fit", function() return {"Fill", "Fit", "Stretch", "Tile", "Center", "Zoom"} end, function() return Library.getFitMode() end, function(opt) Library.setFitMode(opt); Library.applyTheme() end)
+    Library.CreateSlider(tabSettings, "Gui Opacity", 25, 100, function() return math.floor(Library.getGuiOpacity() * 100 + 0.5) end, function(v) Library.setGuiOpacity(v / 100); Library.applyTheme() end, function(v) return v .. "%" end)
     
     -- Конфиги
     Library.CreateSection(tabSettings, "Configs")
@@ -288,11 +289,17 @@ return function(Library)
     end)
     
     Library.CreateButton(tabSettings, "Reset defaults", function()
-        uiColor_MainWindow, uiColor_TopBar, uiColor_SideBar = COL_BG, COL_BG, COL_BG
-        uiColor_TextColor, uiColor_ButtonColor, uiColor_TextBoxColor = COL_TEXT, COL_BG, COL_TEXTBOX
-        uiColor_ToggleOnText = Color3.fromRGB(100, 255, 100); uiColor_ToggleOffText = Color3.fromRGB(255, 100, 100)
-        uiGuiOpacity, uiImageOpacity, uiBlurSize = 1, 1, 0
-        uiFitMode, uiBackgroundFile = "Fill", ""
+        Library.setToggleKey(Enum.KeyCode.P); keyBindBtn.Text = "P"
+        Library.setColor("MainWindow", Color3.fromRGB(12, 12, 12))
+        Library.setColor("TopBar", Color3.fromRGB(12, 12, 12))
+        Library.setColor("SideBar", Color3.fromRGB(12, 12, 12))
+        Library.setColor("Text", Color3.fromRGB(139, 135, 127))
+        Library.setColor("Button", Color3.fromRGB(12, 12, 12))
+        Library.setColor("TextBox", Color3.fromRGB(18, 18, 18))
+        Library.setColor("ToggleOn", Color3.fromRGB(100, 255, 100))
+        Library.setColor("ToggleOff", Color3.fromRGB(255, 100, 100))
+        Library.setGuiOpacity(1); Library.setImageOpacity(1); Library.setBlurSize(0)
+        Library.setFitMode("Fill"); Library.setBackgroundFile("")
         Library.applyTheme(); Library.autoSaveConfig(true); Library.notify("Configs", "Settings reset to defaults")
     end)
 
@@ -303,7 +310,7 @@ return function(Library)
         if cfg then Library.applyTheme() end
         
         -- Профиль
-        local UserProfilePanel = create("Frame", {Name = "UserProfilePanel", Parent = tabMain, Size = UDim2.new(1, 0, 0, 60), LayoutOrder = -1, BackgroundColor3 = uiColor_SideBar, BorderColor3 = COL_BORDER})
+        local UserProfilePanel = create("Frame", {Name = "UserProfilePanel", Parent = tabMain, Size = UDim2.new(1, 0, 0, 60), LayoutOrder = -1, BackgroundColor3 = Library.getColor("SideBar"), BorderColor3 = COL_BORDER})
         table.insert(themeElements.SideBars, UserProfilePanel)
         create("ImageLabel", {Parent = UserProfilePanel, Position = UDim2.new(0, 10, 0, 10), Size = UDim2.new(0, 40, 0, 40), BackgroundTransparency = 1, Image = "rbxthumb://type=AvatarHeadShot&id=" .. LocalPlayer.UserId .. "&w=150&h=150"})
         create("TextLabel", {Parent = UserProfilePanel, Position = UDim2.new(0, 60, 0, 6), Size = UDim2.new(1, -70, 0, 16), BackgroundTransparency = 1, Text = LocalPlayer.DisplayName, TextColor3 = Color3.fromRGB(255, 255, 255), TextSize = 13, Font = FONT, TextXAlignment = Enum.TextXAlignment.Left})
