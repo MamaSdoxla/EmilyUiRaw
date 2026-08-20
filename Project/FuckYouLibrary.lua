@@ -1364,9 +1364,9 @@ end
 
 local cachedKeyResponse = nil
 local currentKeyData = { group = "Free", daysLeft = "Infinity" }
-_G.currentKeyData = currentKeyData  -- Экспортируем в глобальную область
+_G.currentKeyData = currentKeyData  -- <-- ЭКСПОРТ
 local unlocked = false
-_G.unlocked = unlocked              -- Экспортируем в глобальную область
+_G.unlocked = unlocked              -- <-- ЭКСПОРТ (если используется в других модулях)
 local beta = false
 
 function FuckYouLib.unlockScript(userGroup, daysLeft)
