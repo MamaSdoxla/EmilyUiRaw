@@ -1,19 +1,20 @@
 --// Music.lua
-return function(Library, mainSideBar, mainMenu, mainContainment)
+return function(Library, ui)
+    local create = Library.create
     local SoundService = game:GetService("SoundService")
     local RunService = game:GetService("RunService")
     local HttpService = game:GetService("HttpService")
     local LocalPlayer = game:GetService("Players").LocalPlayer
     local FONT = Enum.Font.SpecialElite
 
-    local MusicBtn = Library.CreateButton(mainSideBar, "Music", function() end)
+    local MusicBtn = Library.CreateButton(ui.SideBar, "Music", function() end)
     MusicBtn.Size = UDim2.new(1, 0, 0, 59); MusicBtn.Position = UDim2.new(0, 0, 0, 118)
 
     local musicTabs = {}
     local function addMusicTab(name, order, builder)
-        local btn = Library.CreateButton(mainMenu, name, function() end)
+        local btn = Library.CreateButton(ui.Menu, name, function() end)
         btn.Size = UDim2.new(1, 0, 0, 40); btn.LayoutOrder = 200 + order; btn.Visible = false
-        local frame = create("Frame", {Name = "Tab"..name, Parent = mainContainment, Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, BorderSizePixel = 0, Visible = false})
+        local frame = create("Frame", {Name = "Tab"..name, Parent = ui.Containment, Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, BorderSizePixel = 0, Visible = false})
         table.insert(musicTabs, {Name = name, Button = btn, Frame = frame})
         btn.MouseButton1Click:Connect(function()
             for _, t in ipairs(musicTabs) do t.Frame.Visible = (t.Name == name) end
@@ -36,7 +37,7 @@ return function(Library, mainSideBar, mainMenu, mainContainment)
 
     local ToggleState = false
     local musicSound = nil
-    local Parts = Instance.new("Model"); Parts.Name = "MusicParts"
+    local Parts = create("Model", {Name = "MusicParts"})
 
     local function rebuildParts(n)
         Settings.Parts = tonumber(n) or 2
@@ -45,15 +46,13 @@ return function(Library, mainSideBar, mainMenu, mainContainment)
         local root = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
         if not root then return end
         for i = 1, Settings.Parts do
-            local p = Instance.new("Part", Parts); p.Color = Settings.StaticColor; p.Transparency = Settings.Transparency
-            p.Anchored = true; p.CanCollide = false; p.Material = Enum.Material[Settings.Material] or Enum.Material.Neon
-            p.Size = Vector3.new(0.2, 0.2, 0.2); p.CFrame = root.CFrame * CFrame.new(0, Settings.Body, 0); p.Parent = Parts
+            local p = create("Part", {Parent = Parts, Color = Settings.StaticColor, Transparency = Settings.Transparency, Anchored = true, CanCollide = false, Material = Enum.Material[Settings.Material] or Enum.Material.Neon, Size = Vector3.new(0.2, 0.2, 0.2), CFrame = root.CFrame * CFrame.new(0, Settings.Body, 0)})
         end
     end
 
+    -- ВАЖНО: Ограничение в 2 секунды, как в оригинале
     local function makeMusicSound(id)
-        local s = Instance.new("Sound", game:GetService("CoreGui")); s.Name = "Music"; s.SoundId = "rbxassetid://" .. (id or "1"); s.Looped = true; s.PlaybackSpeed = 1; s.Volume = 1
-        -- ВАЖНО: Ограничение в 2 секунды, как в оригинале
+        local s = create("Sound", {Parent = game:GetService("CoreGui"), Name = "Music", SoundId = "rbxassetid://" .. (id or "1"), Looped = true, PlaybackSpeed = 1, Volume = 1})
         local conn; conn = RunService.Heartbeat:Connect(function()
             if s.IsPlaying and s.TimePosition >= 2 then
                 s:Stop(); conn:Disconnect(); s:Destroy()
@@ -62,7 +61,6 @@ return function(Library, mainSideBar, mainMenu, mainContainment)
         return s
     end
 
-    --// Home Tab
     addMusicTab("Home", 1, function(parent)
         Library.CreateSection(parent, "HOME")
         local idBox = Library.CreateTextBox(parent, "Sound ID", FONT)
@@ -79,7 +77,6 @@ return function(Library, mainSideBar, mainMenu, mainContainment)
         Library.CreateButton(parent, "STOP", function() if musicSound then musicSound:Stop(); musicSound:Destroy(); musicSound = nil end end)
     end)
 
-    --// Music Library Tab
     addMusicTab("Music", 2, function(parent)
         Library.CreateSection(parent, "MUSIC LIBRARY")
         local searchBox = Library.CreateTextBox(parent, "Search ID / Name...", FONT)
@@ -96,7 +93,6 @@ return function(Library, mainSideBar, mainMenu, mainContainment)
         end
     end)
 
-    --// Settings Tab
     addMusicTab("Settings", 3, function(parent)
         Library.CreateSection(parent, "SETTINGS")
         Library.CreateToggle(parent, "Music Visualizer", ToggleState, function(v)
@@ -107,7 +103,6 @@ return function(Library, mainSideBar, mainMenu, mainContainment)
         Library.CreateButton(parent, "Save Settings", function() saveJson(FILE_SETTINGS, Settings) end)
     end)
 
-    --// Materials Tab
     addMusicTab("Materials", 4, function(parent)
         Library.CreateSection(parent, "MATERIALS")
         local materialsList = {"Neon", "Plastic", "Glass", "ForceField", "Wood", "Marble", "Slate", "Granite", "Brick", "Metal", "Ice", "Sand", "Fabric"}
@@ -119,7 +114,6 @@ return function(Library, mainSideBar, mainMenu, mainContainment)
         end
     end)
 
-    --// Grabber Tab
     addMusicTab("Grabber", 5, function(parent)
         Library.CreateSection(parent, "GRABBER")
         Library.CreateButton(parent, "START SCAN", function()

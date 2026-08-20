@@ -1,19 +1,20 @@
 --// Movement.lua
-return function(Library, mainSideBar, mainMenu, mainContainment)
+return function(Library, ui)
+    local create = Library.create
     local Players = game:GetService("Players")
     local RunService = game:GetService("RunService")
     local HttpService = game:GetService("HttpService")
     local LocalPlayer = Players.LocalPlayer
     local FONT = Enum.Font.SpecialElite
 
-    local MovementBtn = Library.CreateButton(mainSideBar, "Movement", function() end)
+    local MovementBtn = Library.CreateButton(ui.SideBar, "Movement", function() end)
     MovementBtn.Size = UDim2.new(1, 0, 0, 59); MovementBtn.Position = UDim2.new(0, 0, 0, 236)
 
     local movementTabs = {}
     local function addMovementTab(name, order, builder)
-        local btn = Library.CreateButton(mainMenu, name, function() end)
+        local btn = Library.CreateButton(ui.Menu, name, function() end)
         btn.Size = UDim2.new(1, 0, 0, 40); btn.LayoutOrder = 400 + order; btn.Visible = false
-        local frame = create("Frame", {Name = "Tab"..name, Parent = mainContainment, Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, BorderSizePixel = 0, Visible = false})
+        local frame = create("Frame", {Name = "Tab"..name, Parent = ui.Containment, Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, BorderSizePixel = 0, Visible = false})
         table.insert(movementTabs, {Name = name, Button = btn, Frame = frame})
         btn.MouseButton1Click:Connect(function()
             for _, t in ipairs(movementTabs) do t.Frame.Visible = (t.Name == name) end
@@ -44,23 +45,22 @@ return function(Library, mainSideBar, mainMenu, mainContainment)
     local selectedCategory = "Default"
     local selectedRecording = nil
 
-    local markersFolder = Instance.new("Folder"); markersFolder.Name = "MovementRecorderMarkers"
+    local markersFolder = create("Folder", {Name = "MovementRecorderMarkers"})
     local markerData = {}
 
     local function createMarker(entry)
         if not entry or not entry.Frames or #entry.Frames < 1 then return end
-        local model = Instance.new("Model"); model.Name = "MovementMarker"
-        local circle = Instance.new("Part"); circle.Shape = Enum.PartType.Cylinder; circle.Size = Vector3.new(Settings.CircleThickness, Settings.CircleRadius * 2, Settings.CircleRadius * 2)
-        circle.Anchored = true; circle.CanCollide = false; circle.Material = Enum.Material.Neon; circle.Transparency = Settings.CircleTransparency
+        local model = create("Model", {Name = "MovementMarker"})
+        local circle = create("Part", {Shape = Enum.PartType.Cylinder, Size = Vector3.new(Settings.CircleThickness, Settings.CircleRadius * 2, Settings.CircleRadius * 2), Anchored = true, CanCollide = false, Material = Enum.Material.Neon, Transparency = Settings.CircleTransparency})
         local pos = entry.Frames[1].cframe.Position
         circle.CFrame = CFrame.new(pos.X, pos.Y + Settings.CircleHeight, pos.Z) * CFrame.Angles(0, 0, math.rad(90))
         circle.Parent = model
         
-        local billboard = Instance.new("BillboardGui"); billboard.Adornee = circle; billboard.Size = UDim2.new(0, 260, 0, 44); billboard.StudsOffset = Vector3.new(0, 4, 0); billboard.AlwaysOnTop = true; billboard.MaxDistance = Settings.TextDistance; billboard.Enabled = Settings.ShowLabels; billboard.Parent = model
-        local label = create("TextLabel", { Parent = billboard, Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, Text = entry.Name, TextColor3 = Color3.fromRGB(255,255,255), TextSize = 16, Font = FONT })
+        local billboard = create("BillboardGui", {Adornee = circle, Size = UDim2.new(0, 260, 0, 44), StudsOffset = Vector3.new(0, 4, 0), AlwaysOnTop = true, MaxDistance = Settings.TextDistance, Enabled = Settings.ShowLabels, Parent = model})
+        create("TextLabel", { Parent = billboard, Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, Text = entry.Name, TextColor3 = Color3.fromRGB(255,255,255), TextSize = 16, Font = FONT })
         
         model.Parent = markersFolder
-        markerData[entry] = { Model = model, Circle = circle, Label = label, StartPos = pos }
+        markerData[entry] = { Model = model, Circle = circle, StartPos = pos }
     end
 
     local function rebuildMarkers()
@@ -102,7 +102,6 @@ return function(Library, mainSideBar, mainMenu, mainContainment)
         state = State.Idle; currentPlayback = nil
     end
 
-    --// Main Loop
     RunService.Heartbeat:Connect(function()
         if state == State.Recording then
             local root = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
@@ -131,18 +130,10 @@ return function(Library, mainSideBar, mainMenu, mainContainment)
                 target = a.cframe:Lerp(b.cframe, alpha)
             end
             local root = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-            if root then
-                if Settings.Legit then
-                    -- Упрощенно: в оригинале используются AlignPosition/BodyPosition
-                    root.CFrame = target
-                else
-                    root.CFrame = target
-                end
-            end
+            if root then root.CFrame = target end
         end
     end)
 
-    --// UI Tabs
     addMovementTab("Main", 1, function(parent)
         Library.CreateSection(parent, "MOVEMENT RECORDER")
         Library.CreateButton(parent, "Start Recording", function() startRecording() end)
@@ -175,7 +166,6 @@ return function(Library, mainSideBar, mainMenu, mainContainment)
         Library.applyTheme()
     end)
 
-    -- Загрузка данных при старте
     local catData = loadJson(FOLDER .. "/Default.json")
     if catData and type(catData) == "table" then libraryData.categories.Default = catData end
     rebuildMarkers()
@@ -188,10 +178,5 @@ return function(Library, mainSideBar, mainMenu, mainContainment)
         return rows
     end)
 
-    return {
-        Tabs = movementTabs,
-        Gather = function() return { Settings = Settings, Enabled = MovementEnabled } end,
-        Apply = function(data) if data.Settings then for k,v in pairs(data.Settings) do Settings[k] = v end end; MovementEnabled = data.Enabled or false end,
-        Reset = function() MovementEnabled = false; Settings.Legit = true; Settings.Loop = false end
-    }
+    return { Tabs = movementTabs, Gather = function() return { Settings = Settings, Enabled = MovementEnabled } end, Apply = function(data) if data.Settings then for k,v in pairs(data.Settings) do Settings[k] = v end end; MovementEnabled = data.Enabled or false end, Reset = function() MovementEnabled = false; Settings.Legit = true; Settings.Loop = false end }
 end

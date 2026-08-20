@@ -1,17 +1,15 @@
 --// EmilyUi.lua
 return function(Library)
+    local create = Library.create
     local Players = game:GetService("Players")
     local LocalPlayer = Players.LocalPlayer
     local HttpService = game:GetService("HttpService")
     local RunService = game:GetService("RunService")
-    local LightingService = game:GetService("Lighting")
-    local StatsService = game:GetService("Stats")
     local Marketplace = game:GetService("MarketplaceService")
     local TeleportService = game:GetService("TeleportService")
 
     local window, topBar, sideBar, menuInsided, containment = Library.CreateWindow("Fuck you! v1.2")
     
-    -- Кнопки управления окном
     local function makeTopBtn(symbol, offset, callback)
         local b = Library.CreateButton(topBar, symbol, callback)
         b.Size = UDim2.new(0, 45, 0, 45); b.Position = UDim2.new(1, -45 * offset, 0, 0)
@@ -28,7 +26,6 @@ return function(Library)
     local EmilyUiBtn = Library.CreateButton(sideBar, "EmilyUi", function() end)
     EmilyUiBtn.Size = UDim2.new(1, 0, 0, 59)
 
-    -- Вкладки
     local tabs = {}
     local function addTab(name, order)
         local btn, frame = Library.CreateTabButton(name, menuInsided, containment, order)
@@ -218,7 +215,7 @@ return function(Library)
             task.wait(1)
             pcall(function()
                 srvUsersL.Text = "Users: " .. #Players:GetPlayers() .. "/" .. Players.MaxPlayers
-                srvPingL.Text = "Ping: " .. math.floor(StatsService.PerformanceStats.Ping:GetValue()) .. " ms"
+                srvPingL.Text = "Ping: " .. math.floor(game:GetService("Stats").PerformanceStats.Ping:GetValue()) .. " ms"
                 local uptime = os.clock() - sessionStart
                 srvUptimeL.Text = string.format("Uptime: %02d:%02d:%02d", math.floor(uptime/3600), math.floor((uptime%3600)/60), uptime%60)
                 sesPlayL.Text = string.format("Playtime: %02d:%02d:%02d", math.floor((os.clock()-sessionStart)/3600), math.floor(((os.clock()-sessionStart)%3600)/60), (os.clock()-sessionStart)%60)
@@ -234,12 +231,13 @@ return function(Library)
         keyBindBtn.Text = "...Press any Key..."
         local conn; conn = game:GetService("UserInputService").InputBegan:Connect(function(input)
             if input.UserInputType == Enum.UserInputType.Keyboard then
-                Library.currentToggleKey = input.KeyCode; keyBindBtn.Text = "Menu Toggle Key: " .. input.KeyCode.Name
+                currentToggleKey = input.KeyCode; keyBindBtn.Text = "Menu Toggle Key: " .. input.KeyCode.Name
                 Library.autoSaveConfig(true); conn:Disconnect()
             end
         end)
     end)
     
+    local function parseRGB(str) local r,g,b = string.match(str, "(%d+)%s*,%s*(%d+)%s*,%s*(%d+)"); return r and Color3.fromRGB(tonumber(r), tonumber(g), tonumber(b)) or nil end
     local colorSettings = {
         { "Main Window Color: ", "12, 12, 12", function(c) uiColor_MainWindow = c end},
         { "Top Bar Color: ", "12, 12, 12", function(c) uiColor_TopBar = c end},
@@ -285,7 +283,7 @@ return function(Library)
         local name = string.gsub(configNameBox.Text, "%s+", " ")
         if name == "" then Library.notify("Configs", "Enter a config name!"); return end
         pcall(function() if not isfolder("EmilyUi/FuckYou") then makefolder("EmilyUi/FuckYou") end; if not isfolder(configFolder) then makefolder(configFolder) end end)
-        local ok, json = pcall(function() return HttpService:JSONEncode(Library.saveConfig()) end) -- Упрощено для примера, в реальности gatherConfig
+        local ok, json = pcall(function() return HttpService:JSONEncode(Library.saveConfig()) end)
         if ok then writefile(configFolder .. "/" .. name .. ".json", json); Library.notify("Configs", "Saved: " .. name) end
     end)
     
@@ -327,7 +325,6 @@ return function(Library)
         for _, t in ipairs(tabs) do t.Frame.Visible = (t.Name == "Main Info") end
         Library.applyTheme()
     end)
-    EmilyUiBtn.MouseButton1Click:Connect(function() end) -- Триггер для показа
 
-    return { Tabs = tabs, Window = window }
+    return { Window = window, SideBar = sideBar, Menu = menuInsided, Containment = containment, Tabs = tabs }
 end

@@ -28,19 +28,19 @@ local beta = false
 local themeElements = { MainWindow={}, TopBars={}, SideBars={}, Texts={}, Buttons={}, TextBoxes={}, FillBars={}, CustomButtons={} }
 local toggleRegistry = {}
 
---// Утилиты
-local function scaleColor(c, f) return Color3.fromRGB(math.clamp(c.R*255*f,0,255), math.clamp(c.G*255*f,0,255), math.clamp(c.B*255*f,0,255)) end
-local function lighter(c, amt) return Color3.fromRGB(math.min(c.R*255+amt,255), math.min(c.G*255+amt,255), math.min(c.B*255+amt,255)) end
-local function darker(c, amt) return Color3.fromRGB(math.max(c.R*255-amt,0), math.max(c.G*255-amt,0), math.max(c.B*255-amt,0)) end
-local function parseRGB(str) local r,g,b = string.match(str, "(%d+)%s*,%s*(%d+)%s*,%s*(%d+)"); return r and Color3.fromRGB(tonumber(r), tonumber(g), tonumber(b)) or nil end
-local function formatColor(c) return math.floor(c.R*255)..", "..math.floor(c.G*255)..", "..math.floor(c.B*255) end
+--// Утилиты (теперь доступны через Library)
+function Library.create(className, properties)
+    local inst = Instance.new(className)
+    for k, v in pairs(properties or {}) do inst[k] = v end
+    return inst
+end
 
+local function scaleColor(c, f) return Color3.fromRGB(math.clamp(c.R*255*f,0,255), math.clamp(c.G*255*f,0,255), math.clamp(c.B*255*f,0,255)) end
 local function fileExists(path)
     if typeof(isfile) ~= "function" then return true end
     local ok, exists = pcall(isfile, path)
     return ok and exists == true
 end
-
 local function customAsset(path)
     if typeof(path) ~= "string" or path == "" then return nil end
     if typeof(isfile) == "function" and not fileExists(path) then return nil end
@@ -62,41 +62,34 @@ function Library.notify(title, text)
         pcall(function()
             local playerGui = LocalPlayer:FindFirstChildOfClass("PlayerGui") or LocalPlayer:WaitForChild("PlayerGui", 5)
             if not playerGui then return end
-            local gui = Instance.new("ScreenGui"); gui.Name = "FallbackNotification"; gui.ResetOnSpawn = false; gui.IgnoreGuiInset = true; gui.Parent = playerGui
-            local main = Instance.new("Frame"); main.AnchorPoint = Vector2.new(1, 1); main.Position = UDim2.new(1, -16, 1, -16); main.Size = UDim2.new(0, 300, 0, 64); main.BackgroundColor3 = COL_BG; main.BorderColor3 = COL_BORDER; main.BorderSizePixel = 1; main.Parent = gui
-            local titleLabel = Instance.new("TextLabel"); titleLabel.Size = UDim2.new(1, -16, 0, 20); titleLabel.Position = UDim2.new(0, 8, 0, 6); titleLabel.BackgroundTransparency = 1; titleLabel.Text = title; titleLabel.Font = FONT; titleLabel.TextSize = 14; titleLabel.TextXAlignment = Enum.TextXAlignment.Left; titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255); titleLabel.Parent = main
-            local textLabel = Instance.new("TextLabel"); textLabel.Size = UDim2.new(1, -16, 0, 30); textLabel.Position = UDim2.new(0, 8, 0, 26); textLabel.BackgroundTransparency = 1; textLabel.Text = text; textLabel.Font = FONT; textLabel.TextSize = 12; textLabel.TextXAlignment = Enum.TextXAlignment.Left; textLabel.TextYAlignment = Enum.TextYAlignment.Top; textLabel.TextWrapped = true; textLabel.TextColor3 = COL_TEXT; textLabel.Parent = main
+            local gui = Library.create("ScreenGui", {Name = "FallbackNotification", ResetOnSpawn = false, IgnoreGuiInset = true, Parent = playerGui})
+            local main = Library.create("Frame", {AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -16, 1, -16), Size = UDim2.new(0, 300, 0, 64), BackgroundColor3 = COL_BG, BorderColor3 = COL_BORDER, BorderSizePixel = 1, Parent = gui})
+            Library.create("TextLabel", {Size = UDim2.new(1, -16, 0, 20), Position = UDim2.new(0, 8, 0, 6), BackgroundTransparency = 1, Text = title, Font = FONT, TextSize = 14, TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = Color3.fromRGB(255, 255, 255), Parent = main})
+            Library.create("TextLabel", {Size = UDim2.new(1, -16, 0, 30), Position = UDim2.new(0, 8, 0, 26), BackgroundTransparency = 1, Text = text, Font = FONT, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top, TextWrapped = true, TextColor3 = COL_TEXT, Parent = main})
             task.delay(15, function() gui:Destroy() end)
         end)
     end)
 end
 
---// Создание UI
-local function create(className, properties)
-    local inst = Instance.new(className)
-    for k, v in pairs(properties) do inst[k] = v end
-    return inst
-end
-
-local ScreenGui = create("ScreenGui", {Name = "FuckYouGui", ResetOnSpawn = false, Parent = LocalPlayer:WaitForChild("PlayerGui")})
+local ScreenGui = Library.create("ScreenGui", {Name = "FuckYouGui", ResetOnSpawn = false, Parent = LocalPlayer:WaitForChild("PlayerGui")})
 
 function Library.CreateWindow(title)
-    local window = create("Frame", {Name = "FuckYou", Parent = ScreenGui, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 0), Size = UDim2.new(0, 940, 0, 510), ClipsDescendants = true, Visible = false, BackgroundColor3 = uiColor_MainWindow, BorderColor3 = COL_BORDER, BorderSizePixel = 1})
+    local window = Library.create("Frame", {Name = "FuckYou", Parent = ScreenGui, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 0), Size = UDim2.new(0, 940, 0, 510), ClipsDescendants = true, Visible = false, BackgroundColor3 = uiColor_MainWindow, BorderColor3 = COL_BORDER, BorderSizePixel = 1})
     table.insert(themeElements.MainWindow, window)
     
-    local topBar = create("Frame", {Name = "TopBar", Parent = window, Size = UDim2.new(1, 0, 0, 45), BackgroundColor3 = uiColor_TopBar, BorderSizePixel = 0})
+    local topBar = Library.create("Frame", {Name = "TopBar", Parent = window, Size = UDim2.new(1, 0, 0, 45), BackgroundColor3 = uiColor_TopBar, BorderSizePixel = 0})
     table.insert(themeElements.TopBars, topBar)
     
-    local sideBar = create("Frame", {Name = "SideBar", Parent = window, Position = UDim2.new(0, 0, 0, 45), Size = UDim2.new(0, 65, 1, -45), BackgroundColor3 = uiColor_SideBar, BorderSizePixel = 0})
+    local sideBar = Library.create("Frame", {Name = "SideBar", Parent = window, Position = UDim2.new(0, 0, 0, 45), Size = UDim2.new(0, 65, 1, -45), BackgroundColor3 = uiColor_SideBar, BorderSizePixel = 0})
     table.insert(themeElements.SideBars, sideBar)
     
-    local menuInsided = create("ScrollingFrame", {Name = "MenuInsided", Parent = window, Position = UDim2.new(0, 65, 0, 45), Size = UDim2.new(0, 105, 1, -45), BackgroundColor3 = uiColor_SideBar, BorderSizePixel = 0, ScrollBarThickness = 3, ScrollBarImageColor3 = COL_BORDER, CanvasSize = UDim2.new(0, 0, 0, 0), ClipsDescendants = true})
+    local menuInsided = Library.create("ScrollingFrame", {Name = "MenuInsided", Parent = window, Position = UDim2.new(0, 65, 0, 45), Size = UDim2.new(0, 105, 1, -45), BackgroundColor3 = uiColor_SideBar, BorderSizePixel = 0, ScrollBarThickness = 3, ScrollBarImageColor3 = COL_BORDER, CanvasSize = UDim2.new(0, 0, 0, 0), ClipsDescendants = true})
     table.insert(themeElements.SideBars, menuInsided)
-    local menuLayout = create("UIListLayout", {Parent = menuInsided, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 4)})
-    create("UIPadding", {Parent = menuInsided, PaddingTop = UDim.new(0, 5), PaddingLeft = UDim.new(0, 5), PaddingRight = UDim.new(0, 5)})
+    local menuLayout = Library.create("UIListLayout", {Parent = menuInsided, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 4)})
+    Library.create("UIPadding", {Parent = menuInsided, PaddingTop = UDim.new(0, 5), PaddingLeft = UDim.new(0, 5), PaddingRight = UDim.new(0, 5)})
     menuLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function() menuInsided.CanvasSize = UDim2.new(0, 0, 0, menuLayout.AbsoluteContentSize.Y + 10) end)
     
-    local containment = create("Frame", {Name = "Containment", Parent = window, Position = UDim2.new(0, 170, 0, 45), Size = UDim2.new(1, -170, 1, -45), BackgroundTransparency = 1, BorderSizePixel = 0})
+    local containment = Library.create("Frame", {Name = "Containment", Parent = window, Position = UDim2.new(0, 170, 0, 45), Size = UDim2.new(1, -170, 1, -45), BackgroundTransparency = 1, BorderSizePixel = 0})
     
     -- Drag
     local dragging, dragInput, dragStart, startPosition
@@ -118,28 +111,28 @@ function Library.CreateWindow(title)
 end
 
 function Library.CreateTabButton(name, parentMenu, containment, order)
-    local btn = create("TextButton", {Name = "Btn_"..name, Parent = parentMenu, Size = UDim2.new(1, 0, 0, 30), LayoutOrder = order, Visible = false, BackgroundColor3 = uiColor_ButtonColor, BorderColor3 = COL_BORDER, TextColor3 = uiColor_TextColor, Text = name, Font = FONT, TextSize = 12})
+    local btn = Library.create("TextButton", {Name = "Btn_"..name, Parent = parentMenu, Size = UDim2.new(1, 0, 0, 30), LayoutOrder = order, Visible = false, BackgroundColor3 = uiColor_ButtonColor, BorderColor3 = COL_BORDER, TextColor3 = uiColor_TextColor, Text = name, Font = FONT, TextSize = 12})
     table.insert(themeElements.Buttons, btn); table.insert(themeElements.Texts, btn)
-    local frame = create("ScrollingFrame", {Name = "Tab_"..name, Parent = containment, Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, BorderSizePixel = 0, ScrollBarThickness = 4, ScrollBarImageColor3 = COL_BORDER, CanvasSize = UDim2.new(0, 0, 0, 0), Visible = false})
-    local tl = create("UIListLayout", {Parent = frame, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 6)})
-    create("UIPadding", {Parent = frame, PaddingTop = UDim.new(0, 10), PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10)})
+    local frame = Library.create("ScrollingFrame", {Name = "Tab_"..name, Parent = containment, Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, BorderSizePixel = 0, ScrollBarThickness = 4, ScrollBarImageColor3 = COL_BORDER, CanvasSize = UDim2.new(0, 0, 0, 0), Visible = false})
+    local tl = Library.create("UIListLayout", {Parent = frame, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 6)})
+    Library.create("UIPadding", {Parent = frame, PaddingTop = UDim.new(0, 10), PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10)})
     tl:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function() frame.CanvasSize = UDim2.new(0, 0, 0, tl.AbsoluteContentSize.Y + 20) end)
     return btn, frame
 end
 
 function Library.CreateSection(parent, text)
-    local lbl = create("TextLabel", {Size = UDim2.new(1, 0, 0, 26), BackgroundTransparency = 1, Text = text, TextColor3 = uiColor_TextColor, TextSize = 13, Font = FONT, Parent = parent})
+    local lbl = Library.create("TextLabel", {Size = UDim2.new(1, 0, 0, 26), BackgroundTransparency = 1, Text = text, TextColor3 = uiColor_TextColor, TextSize = 13, Font = FONT, Parent = parent})
     table.insert(themeElements.Texts, lbl); return lbl
 end
 
 function Library.CreateLabel(parent, text)
-    local lbl = create("TextLabel", {Size = UDim2.new(1, 0, 0, 22), BackgroundTransparency = 1, Text = text, TextColor3 = uiColor_TextColor, TextSize = 13, Font = FONT, TextXAlignment = Enum.TextXAlignment.Left, Parent = parent})
+    local lbl = Library.create("TextLabel", {Size = UDim2.new(1, 0, 0, 22), BackgroundTransparency = 1, Text = text, TextColor3 = uiColor_TextColor, TextSize = 13, Font = FONT, TextXAlignment = Enum.TextXAlignment.Left, Parent = parent})
     table.insert(themeElements.Texts, lbl); return lbl
 end
 
 function Library.CreateButton(parent, text, callback, customColor)
     local defaultColor = customColor or uiColor_ButtonColor
-    local btn = create("TextButton", {Size = UDim2.new(1, 0, 0, 30), BackgroundColor3 = defaultColor, BorderColor3 = COL_BORDER, TextColor3 = uiColor_TextColor, Text = text, Font = FONT, TextSize = 13, BackgroundTransparency = 1 - uiGuiOpacity, Parent = parent})
+    local btn = Library.create("TextButton", {Size = UDim2.new(1, 0, 0, 30), BackgroundColor3 = defaultColor, BorderColor3 = COL_BORDER, TextColor3 = uiColor_TextColor, Text = text, Font = FONT, TextSize = 13, BackgroundTransparency = 1 - uiGuiOpacity, Parent = parent})
     if not customColor then table.insert(themeElements.Buttons, btn) else table.insert(themeElements.CustomButtons, btn) end
     table.insert(themeElements.Texts, btn)
     btn.MouseEnter:Connect(function() local c = btn.BackgroundColor3; btn.BackgroundColor3 = Color3.fromRGB(math.min(c.R*255+10,255), math.min(c.G*255+10,255), math.min(c.B*255+10,255)) end)
@@ -148,13 +141,13 @@ function Library.CreateButton(parent, text, callback, customColor)
 end
 
 function Library.CreateTextBox(parent, placeholder, font)
-    local box = create("TextBox", {BackgroundColor3 = uiColor_TextBoxColor, BorderColor3 = COL_BORDER, TextColor3 = uiColor_TextColor, PlaceholderColor3 = Color3.fromRGB(90, 90, 90), PlaceholderText = placeholder, Text = "", TextSize = 13, Font = font or FONT, ClearTextOnFocus = false, BackgroundTransparency = 1 - uiGuiOpacity, Parent = parent})
+    local box = Library.create("TextBox", {BackgroundColor3 = uiColor_TextBoxColor, BorderColor3 = COL_BORDER, TextColor3 = uiColor_TextColor, PlaceholderColor3 = Color3.fromRGB(90, 90, 90), PlaceholderText = placeholder, Text = "", TextSize = 13, Font = font or FONT, ClearTextOnFocus = false, BackgroundTransparency = 1 - uiGuiOpacity, Parent = parent})
     table.insert(themeElements.Texts, box); table.insert(themeElements.TextBoxes, box); return box
 end
 
 function Library.CreateToggle(parent, labelText, initial, callback)
     local obj = {State = initial and true or false}
-    local btn = create("TextButton", {Size = UDim2.new(1, 0, 0, 30), BackgroundColor3 = uiColor_ButtonColor, BorderColor3 = COL_BORDER, BackgroundTransparency = 1 - uiGuiOpacity, TextColor3 = uiColor_TextColor, Text = "", Font = FONT, TextSize = 13, Parent = parent})
+    local btn = Library.create("TextButton", {Size = UDim2.new(1, 0, 0, 30), BackgroundColor3 = uiColor_ButtonColor, BorderColor3 = COL_BORDER, BackgroundTransparency = 1 - uiGuiOpacity, TextColor3 = uiColor_TextColor, Text = "", Font = FONT, TextSize = 13, Parent = parent})
     table.insert(themeElements.CustomButtons, btn); table.insert(themeElements.Texts, btn)
     local function paint()
         btn.Text = labelText .. ": " .. (obj.State and "ON" or "OFF")
@@ -168,13 +161,13 @@ function Library.CreateToggle(parent, labelText, initial, callback)
 end
 
 function Library.CreateDropdown(parent, labelText, options, getCurrent, onselect)
-    local container = create("Frame", {Size = UDim2.new(1, 0, 0, 36), BackgroundTransparency = 1, Parent = parent})
-    create("TextLabel", {Size = UDim2.new(0.45, 0, 1, 0), BackgroundTransparency = 1, Text = labelText, TextColor3 = uiColor_TextColor, TextSize = 13, Font = FONT, TextXAlignment = Enum.TextXAlignment.Left, Parent = container})
+    local container = Library.create("Frame", {Size = UDim2.new(1, 0, 0, 36), BackgroundTransparency = 1, Parent = parent})
+    Library.create("TextLabel", {Size = UDim2.new(0.45, 0, 1, 0), BackgroundTransparency = 1, Text = labelText, TextColor3 = uiColor_TextColor, TextSize = 13, Font = FONT, TextXAlignment = Enum.TextXAlignment.Left, Parent = container})
     local btn = Library.CreateButton(container, labelText .. ": " .. getCurrent(), function() end)
     btn.Size = UDim2.new(0.5, 0, 0.8, 0); btn.Position = UDim2.new(0.48, 0, 0.1, 0); btn.TextSize = 12
-    local list = create("ScrollingFrame", {Parent = container, Size = UDim2.new(0.5, 0, 0, 110), Position = UDim2.new(0.48, 0, 0.95, 0), BackgroundColor3 = uiColor_TextBoxColor, BorderColor3 = COL_BORDER, ScrollBarThickness = 4, CanvasSize = UDim2.new(0, 0, 0, 0), Visible = false, ZIndex = 25})
+    local list = Library.create("ScrollingFrame", {Parent = container, Size = UDim2.new(0.5, 0, 0, 110), Position = UDim2.new(0.48, 0, 0.95, 0), BackgroundColor3 = uiColor_TextBoxColor, BorderColor3 = COL_BORDER, ScrollBarThickness = 4, CanvasSize = UDim2.new(0, 0, 0, 0), Visible = false, ZIndex = 25})
     table.insert(themeElements.TextBoxes, list)
-    create("UIListLayout", {Parent = list, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 2)})
+    Library.create("UIListLayout", {Parent = list, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 2)})
     btn.MouseButton1Click:Connect(function()
         if list.Visible then list.Visible = false; return end
         for _, ch in ipairs(list:GetChildren()) do if ch:IsA("TextButton") then ch:Destroy() end end
@@ -297,7 +290,7 @@ end
 local function playUnlockJingle()
     pcall(function()
         local SoundService = game:GetService("SoundService")
-        local s = Instance.new("Sound"); s.Name = "FuckYouUnlockSound"; s.SoundId = "rbxassetid://115440201770223"; s.Volume = 1; s.Looped = false; s.TimePosition = 0; s.Parent = SoundService
+        local s = Library.create("Sound", {Name = "FuckYouUnlockSound", SoundId = "rbxassetid://115440201770223", Volume = 1, Looped = false, TimePosition = 0, Parent = SoundService})
         local done = false; local conn = nil
         local function cleanup() if done then return end; done = true; if conn then conn:Disconnect() end; pcall(function() s:Stop() end); pcall(function() s:Destroy() end) end
         s.Ended:Connect(cleanup)
@@ -307,18 +300,18 @@ local function playUnlockJingle()
 end
 
 function Library.initKeySystem(window, topBar, sideBar, menuInsided, containment, onUnlock)
-    local KeyWindow = create("Frame", {Name = "KeyWindow", Parent = ScreenGui, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 0), Size = UDim2.new(0, 450, 0, 310), BackgroundColor3 = uiColor_MainWindow, BorderColor3 = COL_BORDER})
+    local KeyWindow = Library.create("Frame", {Name = "KeyWindow", Parent = ScreenGui, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 0), Size = UDim2.new(0, 450, 0, 310), BackgroundColor3 = uiColor_MainWindow, BorderColor3 = COL_BORDER})
     table.insert(themeElements.MainWindow, KeyWindow)
-    local KeyTopBar = create("Frame", {Parent = KeyWindow, Size = UDim2.new(1, 0, 0, 35), BackgroundColor3 = uiColor_TopBar, BorderSizePixel = 0})
+    local KeyTopBar = Library.create("Frame", {Parent = KeyWindow, Size = UDim2.new(1, 0, 0, 35), BackgroundColor3 = uiColor_TopBar, BorderSizePixel = 0})
     table.insert(themeElements.TopBars, KeyTopBar)
-    create("TextLabel", {Parent = KeyTopBar, Size = UDim2.new(1, -40, 1, 0), Position = UDim2.new(0, 10, 0, 0), BackgroundTransparency = 1, Text = "Fuck you! — Key System", TextColor3 = uiColor_TextColor, TextSize = 15, Font = FONT, TextXAlignment = Enum.TextXAlignment.Left})
+    Library.create("TextLabel", {Parent = KeyTopBar, Size = UDim2.new(1, -40, 1, 0), Position = UDim2.new(0, 10, 0, 0), BackgroundTransparency = 1, Text = "Fuck you! — Key System", TextColor3 = uiColor_TextColor, TextSize = 15, Font = FONT, TextXAlignment = Enum.TextXAlignment.Left})
     local KeyCloseBtn = Library.CreateButton(KeyTopBar, "X", function() ScreenGui:Destroy() end, Color3.fromRGB(120, 40, 40))
     KeyCloseBtn.Size = UDim2.new(0, 35, 0, 35); KeyCloseBtn.Position = UDim2.new(1, -35, 0, 0)
     
-    local KeyInfoLabel = create("TextLabel", {Parent = KeyWindow, Size = UDim2.new(1, -30, 0, 40), Position = UDim2.new(0, 15, 0, 50), BackgroundTransparency = 1, Text = "Please enter your access key below to load the script.\nKey can be obtained via Discord.", TextColor3 = uiColor_TextColor, TextSize = 13, Font = FONT, TextWrapped = true})
+    local KeyInfoLabel = Library.create("TextLabel", {Parent = KeyWindow, Size = UDim2.new(1, -30, 0, 40), Position = UDim2.new(0, 15, 0, 50), BackgroundTransparency = 1, Text = "Please enter your access key below to load the script.\nKey can be obtained via Discord.", TextColor3 = uiColor_TextColor, TextSize = 13, Font = FONT, TextWrapped = true})
     table.insert(themeElements.Texts, KeyInfoLabel)
     
-    Library.CreateButton(KeyWindow, "Click to copy Discord Server link", function() if setclipboard then setclipboard("https://discord.gg/75Dz8T9hHR") end; Library.notify("Discord", "The link is copied") end).Size = UDim2.new(1, -40, 0, 36); 
+    Library.CreateButton(KeyWindow, "Click to copy Discord Server link", function() if setclipboard then setclipboard("https://discord.gg/75Dz8T9hHR") end; Library.notify("Discord", "The link is copied") end).Size = UDim2.new(1, -40, 0, 36)
     
     local KeyTextBox = Library.CreateTextBox(KeyWindow, "Enter key here...", FONT)
     KeyTextBox.Size = UDim2.new(1, -40, 0, 36)
@@ -371,15 +364,15 @@ end
 local keyListProviders = {}
 function Library.registerKeyListProvider(group, fn) keyListProviders[group] = fn end
 local KL = { Enabled = true, ShowEmily = true, ShowDesync = true, ShowMusic = true, ShowAim = true, ShowMovement = true }
-local overlay = create("Frame", { Name = "FYKeyList", Parent = ScreenGui, AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -16, 1, -16), Size = UDim2.new(0, 250, 0, 60), BackgroundColor3 = uiColor_MainWindow, BorderColor3 = COL_BORDER, BorderSizePixel = 1, Visible = false, ZIndex = 5 })
+local overlay = Library.create("Frame", { Name = "FYKeyList", Parent = ScreenGui, AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -16, 1, -16), Size = UDim2.new(0, 250, 0, 60), BackgroundColor3 = uiColor_MainWindow, BorderColor3 = COL_BORDER, BorderSizePixel = 1, Visible = false, ZIndex = 5 })
 table.insert(themeElements.MainWindow, overlay)
-local topLine = create("Frame", {Parent = overlay, Size = UDim2.new(1, 0, 0, 2), BackgroundColor3 = Color3.fromRGB(255, 255, 255), BorderSizePixel = 0, ZIndex = 6})
-create("UIGradient", {Parent = topLine, Color = ColorSequence.new({ColorSequenceKeypoint.new(0.00, Color3.fromRGB(0, 170, 255)), ColorSequenceKeypoint.new(0.25, Color3.fromRGB(170, 80, 255)), ColorSequenceKeypoint.new(0.50, Color3.fromRGB(255, 90, 160)), ColorSequenceKeypoint.new(0.75, Color3.fromRGB(255, 190, 60)), ColorSequenceKeypoint.new(1.00, Color3.fromRGB(150, 255, 80))})})
-local titleBar = create("TextLabel", {Parent = overlay, Size = UDim2.new(1, 0, 0, 24), Position = UDim2.new(0, 0, 0, 2), BackgroundTransparency = 1, Text = "KEYBINDS", TextColor3 = uiColor_TextColor, TextSize = 13, Font = FONT, ZIndex = 6})
+local topLine = Library.create("Frame", {Parent = overlay, Size = UDim2.new(1, 0, 0, 2), BackgroundColor3 = Color3.fromRGB(255, 255, 255), BorderSizePixel = 0, ZIndex = 6})
+Library.create("UIGradient", {Parent = topLine, Color = ColorSequence.new({ColorSequenceKeypoint.new(0.00, Color3.fromRGB(0, 170, 255)), ColorSequenceKeypoint.new(0.25, Color3.fromRGB(170, 80, 255)), ColorSequenceKeypoint.new(0.50, Color3.fromRGB(255, 90, 160)), ColorSequenceKeypoint.new(0.75, Color3.fromRGB(255, 190, 60)), ColorSequenceKeypoint.new(1.00, Color3.fromRGB(150, 255, 80))})})
+local titleBar = Library.create("TextLabel", {Parent = overlay, Size = UDim2.new(1, 0, 0, 24), Position = UDim2.new(0, 0, 0, 2), BackgroundTransparency = 1, Text = "KEYBINDS", TextColor3 = uiColor_TextColor, TextSize = 13, Font = FONT, ZIndex = 6})
 table.insert(themeElements.Texts, titleBar)
-local rowsFrame = create("Frame", {Parent = overlay, Size = UDim2.new(1, 0, 1, -26), Position = UDim2.new(0, 0, 0, 26), BackgroundTransparency = 1, ZIndex = 6})
-local rowsLayout = create("UIListLayout", {Parent = rowsFrame, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 4)})
-create("UIPadding", {Parent = rowsFrame, PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10), PaddingBottom = UDim.new(0, 8)})
+local rowsFrame = Library.create("Frame", {Parent = overlay, Size = UDim2.new(1, 0, 1, -26), Position = UDim2.new(0, 0, 0, 26), BackgroundTransparency = 1, ZIndex = 6})
+local rowsLayout = Library.create("UIListLayout", {Parent = rowsFrame, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 4)})
+Library.create("UIPadding", {Parent = rowsFrame, PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10), PaddingBottom = UDim.new(0, 8)})
 
 local GROUP_MAP = { {"ShowEmily", "EmilyUi", "EMILYUI"}, {"ShowDesync", "Desync", "DESYNC"}, {"ShowMusic", "Music", "MUSIC"}, {"ShowAim", "Aim", "AIM"}, {"ShowMovement", "Movement", "MOVEMENT"} }
 local function collectRows()
@@ -400,12 +393,12 @@ local function rebuildKL()
     for _, ch in ipairs(rowsFrame:GetChildren()) do if ch:IsA("Frame") or ch:IsA("TextLabel") then ch:Destroy() end end
     for i, it in ipairs(collectRows()) do
         if it[1] == "h" then
-            local h = create("TextLabel", { Parent = rowsFrame, LayoutOrder = i, Size = UDim2.new(1, 0, 0, 14), BackgroundTransparency = 1, Text = it[2], TextColor3 = uiColor_TextColor, TextSize = 11, Font = FONT, TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 6 })
+            local h = Library.create("TextLabel", { Parent = rowsFrame, LayoutOrder = i, Size = UDim2.new(1, 0, 0, 14), BackgroundTransparency = 1, Text = it[2], TextColor3 = uiColor_TextColor, TextSize = 11, Font = FONT, TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 6 })
             table.insert(themeElements.Texts, h)
         else
-            local r = create("Frame", {Parent = rowsFrame, LayoutOrder = i, Size = UDim2.new(1, 0, 0, 16), BackgroundTransparency = 1, ZIndex = 6})
-            create("TextLabel", {Parent = r, Size = UDim2.new(0.62, 0, 1, 0), BackgroundTransparency = 1, Text = it[2], TextColor3 = uiColor_TextColor, TextSize = 12, Font = FONT, TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 6})
-            create("TextLabel", {Parent = r, Size = UDim2.new(0.38, 0, 1, 0), Position = UDim2.new(0.62, 0, 0, 0), BackgroundTransparency = 1, Text = it[3], TextColor3 = uiColor_ToggleOnText, TextSize = 12, Font = FONT, TextXAlignment = Enum.TextXAlignment.Right, TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 6})
+            local r = Library.create("Frame", {Parent = rowsFrame, LayoutOrder = i, Size = UDim2.new(1, 0, 0, 16), BackgroundTransparency = 1, ZIndex = 6})
+            Library.create("TextLabel", {Parent = r, Size = UDim2.new(0.62, 0, 1, 0), BackgroundTransparency = 1, Text = it[2], TextColor3 = uiColor_TextColor, TextSize = 12, Font = FONT, TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 6})
+            Library.create("TextLabel", {Parent = r, Size = UDim2.new(0.38, 0, 1, 0), Position = UDim2.new(0.62, 0, 0, 0), BackgroundTransparency = 1, Text = it[3], TextColor3 = uiColor_ToggleOnText, TextSize = 12, Font = FONT, TextXAlignment = Enum.TextXAlignment.Right, TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 6})
         end
     end
     if overlay.Parent then overlay.Size = UDim2.new(0, 250, 0, 26 + rowsLayout.AbsoluteContentSize.Y + 8) end
