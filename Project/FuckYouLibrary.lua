@@ -1363,11 +1363,10 @@ local function playUnlockJingle()
 end
 
 local cachedKeyResponse = nil
-local currentKeyData = {
-    group = "Free",
-    daysLeft = "Infinity"
-}
+local currentKeyData = { group = "Free", daysLeft = "Infinity" }
+_G.currentKeyData = currentKeyData  -- Экспортируем в глобальную область
 local unlocked = false
+_G.unlocked = unlocked              -- Экспортируем в глобальную область
 local beta = false
 
 function FuckYouLib.unlockScript(userGroup, daysLeft)
