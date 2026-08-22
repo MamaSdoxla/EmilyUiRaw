@@ -1,60 +1,68 @@
-local Library = require("EmilyUiLib") -- Укажи правильный путь
+--// Loader.lua - Пример загрузки модулей
+local Library = loadstring(game:HttpGet("URL_К_Библиотеке"))()
 
--- 6. ИСПРАВЛЕНИЕ: Инициализация модулей и сохранение их API
--- Пути require должны соответствовать твоей структуре
-Library.Modules.Desync = require("DesyncModule")(Library)
-Library.Modules.Music = require("MusicModule")(Library)
-Library.Modules.Aim = require("AimModule")(Library)
-Library.Modules.Movement = require("MovementModule")(Library)
-Library.Modules.EmilyUi = require("EmilyUiModule")(Library)
+--// Создание окна
+local Window = Library:CreateWindow({
+    Title = "FuckYou UI v1.0",
+    ToggleKey = Enum.KeyCode.P
+})
 
--- Глобальная функция сохранения конфигурации
-function Library.saveConfig()
-    local config = {
-        ToggleKey = "P", -- Заменить на реальную переменную
-        -- ... основные цвета UI ...
-    }
-    
-    -- 6. ИСПРАВЛЕНИЕ: Сбор данных из всех модулей через их API
-    for moduleName, moduleAPI in pairs(Library.Modules) do
-        if moduleAPI and type(moduleAPI.Gather) == "function" then
-            config[moduleName] = moduleAPI.Gather()
-        end
-    end
-    
-    -- Логика записи в файл (writefile)
-    pcall(function()
-        writefile("EmilyUi/Config.json", game:GetService("HttpService"):JSONEncode(config))
-    end)
-end
-
--- Глобальная функция загрузки конфигурации
-function Library.loadConfig()
-    local success, json = pcall(function() return readfile("EmilyUi/Config.json") end)
-    if not success or not json then return end
-    
-    local ok, config = pcall(function() return game:GetService("HttpService"):JSONDecode(json) end)
-    if not ok or type(config) ~= "table" then return end
-
-    -- 6. ИСПРАВЛЕНИЕ: Применение конфигов модулей ПОСЛЕ их инициализации
-    for moduleName, moduleAPI in pairs(Library.Modules) do
-        if config[moduleName] and type(moduleAPI.Apply) == "function" then
-            moduleAPI.Apply(config[moduleName])
-        end
-    end
-end
-
--- Функция разблокировки (вызывается после успешного ввода ключа)
-function Library.onUnlock()
-    Library.loadConfig()
-    Library.applyTheme()
-    Library.switchModule("EmilyUi") -- 1. ИСПРАВЛЕНИЕ: Правильный старт
-    Library.saveConfig()
-end
-
--- Запуск проверки ключа или немедленная разблокировка для тестов
-task.spawn(function()
-    -- Здесь твоя логика проверки ключа
-    -- При успехе: Library.onUnlock()
-    Library.onUnlock() 
+--// Создание боковых кнопок
+Window:CreateSidebarButton("Main", function()
+    print("Main clicked")
 end)
+
+Window:CreateSidebarButton("Modules", function()
+    print("Modules clicked")
+end)
+
+--// Создание вкладок
+local mainTab = Window:CreateTab("Main Info")
+local universalTab = Window:CreateTab("Universal")
+local characterTab = Window:CreateTab("Character")
+
+--// Добавление элементов во вкладки
+Window:CreateSection(mainTab, "Welcome")
+Window:CreateLabel(mainTab, "This is the main info tab")
+Window:CreateButton(mainTab, "Click Me", function()
+    Library:Notify("Notification", "Button clicked!", 5)
+end)
+
+--// Toggle
+Window:CreateToggle(mainTab, "Enable Feature", true, function(state)
+    print("Toggle state:", state)
+end)
+
+--// Slider
+Window:CreateSlider(mainTab, "Speed", 1, 100, 50, function(value)
+    print("Speed:", value)
+end)
+
+--// Dropdown
+Window:CreateDropdown(mainTab, "Mode", {"Auto", "Manual", "Semi"}, "Auto", function(selected)
+    print("Selected mode:", selected)
+end)
+
+--// TextBox
+Window:CreateTextBox(mainTab, "Enter text...", function(text)
+    print("Entered:", text)
+end)
+
+--// Key System (опционально)
+--[[
+Window:CreateKeySystem({
+    KeyUrl = "https://example.com/keys.txt",
+    SecretKey = "mysecretkey",
+    OnSuccess = function()
+        Library:Notify("Success", "Key validated!", 5)
+    end,
+    OnFailure = function()
+        Library:Notify("Error", "Invalid key!", 5)
+    end
+})
+]]
+
+--// Settings tab (встроенный)
+Window:CreateSettingsTab()
+
+Library:Notify("Library Loaded", "FuckYou UI Library v1.0", 5)
