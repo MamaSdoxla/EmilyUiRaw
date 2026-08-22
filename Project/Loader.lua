@@ -1,49 +1,60 @@
---// Loader.lua
-local BASE_URL = "https://raw.githubusercontent.com/MamaSdoxla/EmilyUiRaw/refs/heads/main/Project"
+local Library = require("EmilyUiLib") -- Укажи правильный путь
 
-local function loadScript(name)
-    local success, result = pcall(function()
-        return loadstring(game:HttpGet(BASE_URL .. "/" .. name))()
-    end)
-    if not success then
-        warn("Failed to load " .. name .. ": " .. tostring(result))
-        return nil
-    end
-    return result
-end
+-- 6. ИСПРАВЛЕНИЕ: Инициализация модулей и сохранение их API
+-- Пути require должны соответствовать твоей структуре
+Library.Modules.Desync = require("DesyncModule")(Library)
+Library.Modules.Music = require("MusicModule")(Library)
+Library.Modules.Aim = require("AimModule")(Library)
+Library.Modules.Movement = require("MovementModule")(Library)
+Library.Modules.EmilyUi = require("EmilyUiModule")(Library)
 
--- 1. Загрузка библиотеки
-local Library = loadScript("EmilyUiLib.lua")
-if not Library then 
-    warn("Критическая ошибка: не удалось загрузить EmilyUiLib.lua")
-    return 
-end
-
--- 2. Загрузка главного модуля EmilyUi (он возвращает ссылки на UI-контейнеры)
-local EmilyUiModule = loadScript("EmilyUi.lua")
-if not EmilyUiModule then return end
-local uiRefs = EmilyUiModule(Library)
-
--- 3-6. Загрузка модулей с передачей Library и uiRefs
-local modules = {
-    { name = "Desync.lua", desc = "Desync" },
-    { name = "Music.lua", desc = "Music" },
-    { name = "Aim.lua", desc = "Aim" },
-    { name = "Movement.lua", desc = "Movement" }
-}
-
-for _, mod in ipairs(modules) do
-    local ModuleFunc = loadScript(mod.name)
-    if ModuleFunc then
-        local success, err = pcall(function()
-            ModuleFunc(Library, uiRefs)
-        end)
-        if not success then
-            Library.notify("Ошибка инициализации", "Модуль " .. mod.desc .. " упал: " .. tostring(err))
+-- Глобальная функция сохранения конфигурации
+function Library.saveConfig()
+    local config = {
+        ToggleKey = "P", -- Заменить на реальную переменную
+        -- ... основные цвета UI ...
+    }
+    
+    -- 6. ИСПРАВЛЕНИЕ: Сбор данных из всех модулей через их API
+    for moduleName, moduleAPI in pairs(Library.Modules) do
+        if moduleAPI and type(moduleAPI.Gather) == "function" then
+            config[moduleName] = moduleAPI.Gather()
         end
-    else
-        Library.notify("Ошибка загрузки", "Файл не найден: " .. mod.name)
+    end
+    
+    -- Логика записи в файл (writefile)
+    pcall(function()
+        writefile("EmilyUi/Config.json", game:GetService("HttpService"):JSONEncode(config))
+    end)
+end
+
+-- Глобальная функция загрузки конфигурации
+function Library.loadConfig()
+    local success, json = pcall(function() return readfile("EmilyUi/Config.json") end)
+    if not success or not json then return end
+    
+    local ok, config = pcall(function() return game:GetService("HttpService"):JSONDecode(json) end)
+    if not ok or type(config) ~= "table" then return end
+
+    -- 6. ИСПРАВЛЕНИЕ: Применение конфигов модулей ПОСЛЕ их инициализации
+    for moduleName, moduleAPI in pairs(Library.Modules) do
+        if config[moduleName] and type(moduleAPI.Apply) == "function" then
+            moduleAPI.Apply(config[moduleName])
+        end
     end
 end
 
-Library.notify("EmilyUi Loader", "All modules loaded successfully.")
+-- Функция разблокировки (вызывается после успешного ввода ключа)
+function Library.onUnlock()
+    Library.loadConfig()
+    Library.applyTheme()
+    Library.switchModule("EmilyUi") -- 1. ИСПРАВЛЕНИЕ: Правильный старт
+    Library.saveConfig()
+end
+
+-- Запуск проверки ключа или немедленная разблокировка для тестов
+task.spawn(function()
+    -- Здесь твоя логика проверки ключа
+    -- При успехе: Library.onUnlock()
+    Library.onUnlock() 
+end)
