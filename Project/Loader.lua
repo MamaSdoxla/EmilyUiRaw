@@ -1,5 +1,5 @@
 --// Loader.lua - Пример загрузки модулей
-local Library = loadstring(game:HttpGet("URL_К_Библиотеке"))()
+local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/MamaSdoxla/EmilyUiRaw/refs/heads/main/Project/lib.lua"))()
 
 --// Создание окна
 local Window = Library:CreateWindow({
