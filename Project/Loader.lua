@@ -1,11 +1,16 @@
 -- 1. Загружаем библиотеку (ЗАМЕНИТЕ URL на вашу реальную raw-ссылку на GitHub)
 local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/MamaSdoxla/EmilyUiRaw/refs/heads/main/Project/Library.lua"))()
 
--- 2. Создаем окно
 local Window = Library:CreateWindow({
     Title = "FuckYou UI v1.0",
     ToggleKey = Enum.KeyCode.P
 })
+
+-- Проверка что окно создано
+print("Window created:", Window.Window)
+print("Window visible:", Window.Window.Visible)
+print("Window parent:", Window.Window.Parent)
+Window.Window.Visible = true
 
 -- 3. Создаем боковые кнопки
 Window:CreateSidebarButton("Main", function()
