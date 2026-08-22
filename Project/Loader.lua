@@ -1,68 +1,50 @@
---// Loader.lua - Пример загрузки модулей
-local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/MamaSdoxla/EmilyUiRaw/refs/heads/main/Project/lib.lua"))()
+-- 1. Загружаем библиотеку (ЗАМЕНИТЕ URL на вашу реальную raw-ссылку на GitHub)
+local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/MamaSdoxla/EmilyUiRaw/refs/heads/main/Project/Library.lua"))()
 
---// Создание окна
+-- 2. Создаем окно
 local Window = Library:CreateWindow({
     Title = "FuckYou UI v1.0",
     ToggleKey = Enum.KeyCode.P
 })
 
---// Создание боковых кнопок
+-- 3. Создаем боковые кнопки
 Window:CreateSidebarButton("Main", function()
-    print("Main clicked")
+    Library:Notify("Info", "Main sidebar clicked!")
 end)
 
 Window:CreateSidebarButton("Modules", function()
-    print("Modules clicked")
+    Library:Notify("Info", "Modules sidebar clicked!")
 end)
 
---// Создание вкладок
+-- 4. Создаем вкладки
 local mainTab = Window:CreateTab("Main Info")
 local universalTab = Window:CreateTab("Universal")
-local characterTab = Window:CreateTab("Character")
 
---// Добавление элементов во вкладки
+-- 5. Добавляем элементы
 Window:CreateSection(mainTab, "Welcome")
 Window:CreateLabel(mainTab, "This is the main info tab")
+
 Window:CreateButton(mainTab, "Click Me", function()
-    Library:Notify("Notification", "Button clicked!", 5)
+    Library:Notify("Success", "Button clicked!", 5)
 end)
 
---// Toggle
 Window:CreateToggle(mainTab, "Enable Feature", true, function(state)
-    print("Toggle state:", state)
+    Library:Notify("Toggle", "Feature is now: " .. tostring(state))
 end)
 
---// Slider
 Window:CreateSlider(mainTab, "Speed", 1, 100, 50, function(value)
-    print("Speed:", value)
+    -- Действие при изменении
 end)
 
---// Dropdown
 Window:CreateDropdown(mainTab, "Mode", {"Auto", "Manual", "Semi"}, "Auto", function(selected)
-    print("Selected mode:", selected)
+    Library:Notify("Dropdown", "Selected: " .. selected)
 end)
 
---// TextBox
 Window:CreateTextBox(mainTab, "Enter text...", function(text)
-    print("Entered:", text)
+    Library:Notify("Input", "You entered: " .. text)
 end)
 
---// Key System (опционально)
---[[
-Window:CreateKeySystem({
-    KeyUrl = "https://example.com/keys.txt",
-    SecretKey = "mysecretkey",
-    OnSuccess = function()
-        Library:Notify("Success", "Key validated!", 5)
-    end,
-    OnFailure = function()
-        Library:Notify("Error", "Invalid key!", 5)
-    end
-})
-]]
-
---// Settings tab (встроенный)
+-- 6. Встроенная вкладка настроек
 Window:CreateSettingsTab()
 
-Library:Notify("Library Loaded", "FuckYou UI Library v1.0", 5)
+Library:Notify("Library Loaded", "FuckYou UI Library v1.0 initialized", 5)
