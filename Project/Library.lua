@@ -184,7 +184,7 @@ local function playUnlockJingle()
             Volume = 1, Parent = game:GetService("SoundService"),
         })
         sound:Play()
-        task.delay(2, function() if sound.Parent then sound:Destroy() end end)
+        task.delay(3, function() if sound.Parent then sound:Destroy() end end)
     end)
 end
 
@@ -294,7 +294,11 @@ local function createMainGui(screenGui, userGroup, daysLeft)
         Parent = window, Position = UDim2.new(0, 65, 0, 45), Size = UDim2.new(0, 105, 1, -45),
         BorderSizePixel = 0, ScrollBarThickness = 3, Visible = false, CanvasSize = UDim2.new(),
     }))
-    local menuLayout = create("UIListLayout", {Parent = menu, Padding = UDim.new(0, 4)})
+    local menuLayout = create("UIListLayout", {
+        Parent = menu,
+        Padding = UDim.new(0, 4),
+        SortOrder = Enum.SortOrder.LayoutOrder,
+    })
     create("UIPadding", {Parent = menu, PaddingTop = UDim.new(0, 5), PaddingLeft = UDim.new(0, 5), PaddingRight = UDim.new(0, 5)})
     menuLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
         menu.CanvasSize = UDim2.new(0, 0, 0, menuLayout.AbsoluteContentSize.Y + 10)
@@ -310,7 +314,11 @@ local function createMainGui(screenGui, userGroup, daysLeft)
             Name = name, Parent = content, Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1,
             BorderSizePixel = 0, ScrollBarThickness = 4, Visible = false, CanvasSize = UDim2.new(),
         })
-        local layout = create("UIListLayout", {Parent = frame, Padding = UDim.new(0, 6)})
+        local layout = create("UIListLayout", {
+            Parent = frame,
+            Padding = UDim.new(0, 6),
+            SortOrder = Enum.SortOrder.LayoutOrder,
+        })
         create("UIPadding", {Parent = frame, PaddingTop = UDim.new(0, 10), PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10), PaddingBottom = UDim.new(0, 10)})
         layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
             frame.CanvasSize = UDim2.new(0, 0, 0, layout.AbsoluteContentSize.Y + 20)
@@ -323,7 +331,7 @@ local function createMainGui(screenGui, userGroup, daysLeft)
     local function createSection(parent, text)
         return track("Text", create("TextLabel", {
             Parent = parent, Size = UDim2.new(1, 0, 0, 26), BackgroundTransparency = 1,
-            Text = text, TextSize = 13, Font = FONT, TextXAlignment = Enum.TextXAlignment.Left,
+            Text = text, TextSize = 13, Font = FONT, TextXAlignment = Enum.TextXAlignment.Center,
         }))
     end
 
@@ -351,7 +359,7 @@ local function createMainGui(screenGui, userGroup, daysLeft)
         local row = create("Frame", {Parent = parent, Size = UDim2.new(1, 0, 0, 36), BackgroundTransparency = 1})
         track("Text", create("TextLabel", {
             Parent = row, Size = UDim2.new(0.45, 0, 1, 0), BackgroundTransparency = 1,
-            Text = labelText, TextSize = 13, Font = FONT, TextXAlignment = Enum.TextXAlignment.Left,
+            Text = labelText, TextSize = 13, Font = FONT, TextXAlignment = Enum.TextXAlignment.Center,
         }))
         return row
     end
@@ -369,7 +377,7 @@ local function createMainGui(screenGui, userGroup, daysLeft)
     local function createDropdown(parent, labelText, options, current, onSelect)
         local row = createRow(parent, labelText)
         local button = createButton(row, current(), nil)
-        button.Size, button.Position = UDim2.new(0.5, 0, 0.8, 0), UDim2.new(0.48, 0, 0.1, 0)
+        button.Size, button.Position = UDim2.new(0.5, 0, 0, 29), UDim2.new(0.48, 0, 0, 3)
         local list = track("Box", create("ScrollingFrame", {
             Parent = row, Position = UDim2.new(0.48, 0, 1, 0), Size = UDim2.new(0.5, 0, 0, 108),
             BorderColor3 = BORDER, ScrollBarThickness = 3, CanvasSize = UDim2.new(), Visible = false, ZIndex = 20,
@@ -400,7 +408,7 @@ local function createMainGui(screenGui, userGroup, daysLeft)
         local valueLabel = track("Text", create("TextLabel", {
             Parent = row, Position = UDim2.new(0.48, 0, 0, 0), Size = UDim2.new(0.5, 0, 0, 15),
             BackgroundTransparency = 1, Text = format(getValue()), TextSize = 12, Font = FONT,
-            TextXAlignment = Enum.TextXAlignment.Right,
+            TextXAlignment = Enum.TextXAlignment.Center,
         }))
         local trackButton = track("Box", create("TextButton", {
             Parent = row, Position = UDim2.new(0.48, 0, 0, 21), Size = UDim2.new(0.5, 0, 0, 10),
@@ -444,7 +452,7 @@ local function createMainGui(screenGui, userGroup, daysLeft)
         local label = create("TextLabel", {
             Parent = profile, Position = UDim2.new(0, 60, 0, line[2]), Size = UDim2.new(1, -70, 0, 15),
             BackgroundTransparency = 1, Text = line[1], TextColor3 = line[3] or color(state.TextColor),
-            TextSize = 12, Font = FONT, TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd,
+            TextSize = 12, Font = FONT, TextXAlignment = Enum.TextXAlignment.Center, TextTruncate = Enum.TextTruncate.AtEnd,
         })
         if not line[3] then track("Text", label) end
     end
@@ -521,30 +529,48 @@ local function createMainGui(screenGui, userGroup, daysLeft)
 
     createSection(settingsTab, "Configs")
     local configName = createTextBox(settingsTab, "Config name...")
+    local selectedConfig = ""
+    local function savedConfigs()
+        local result = getFiles(CONFIG_FOLDER, "json")
+        if #result == 0 then return {"No saved configs"} end
+        return result
+    end
+
     local configPicker
     configPicker = createDropdown(settingsTab, "Saved config", function()
-        local result = getFiles(CONFIG_FOLDER, "json")
-        if #result == 0 then result = {"No saved configs"} end
-        return result
-    end, function() return "Click to select" end, function(name)
+        return savedConfigs()
+    end, function()
+        if selectedConfig ~= "" then return selectedConfig end
+        local configs = getFiles(CONFIG_FOLDER, "json")
+        return "Configs (" .. #configs .. ") - select"
+    end, function(name)
         if name == "No saved configs" then return end
         local data = readConfig(CONFIG_FOLDER .. "/" .. name .. ".json")
         if data then
+            selectedConfig = name
             applyState(data); keyButton.Text = currentToggleKey.Name
             applyTheme(); updateBackground(); updateBlur(); writeConfig(SETTINGS_PATH)
             notify("Configs", "Loaded: " .. name)
+        else
+            notify("Configs", "Failed to load: " .. name)
         end
     end)
     createButton(settingsTab, "Save config", function()
         local name = configName.Text:gsub("[^%w_%-]", "")
         if name == "" then notify("Configs", "Enter a config name"); return end
         if writeConfig(CONFIG_FOLDER .. "/" .. name .. ".json") then
-            configName.Text = ""; notify("Configs", "Saved: " .. name)
+            selectedConfig = name
+            configPicker.Text = name
+            configName.Text = ""
+            notify("Configs", "Saved: " .. name)
         else
             notify("Configs", "Executor doesn't support files")
         end
     end)
-    createButton(settingsTab, "Refresh config list", function() configPicker.Text = "Click to select" end)
+    createButton(settingsTab, "Refresh config list", function()
+        selectedConfig = ""
+        configPicker.Text = "Configs (" .. #getFiles(CONFIG_FOLDER, "json") .. ") - select"
+    end)
     createButton(settingsTab, "Reset defaults", function()
         resetState(); keyButton.Text = currentToggleKey.Name
         applyTheme(); updateBackground(); updateBlur(); writeConfig(SETTINGS_PATH)
@@ -642,7 +668,7 @@ local function createKeyWindow()
     create("TextLabel", {
         Parent = top, Position = UDim2.new(0, 10, 0, 0), Size = UDim2.new(1, -50, 1, 0),
         BackgroundTransparency = 1, Text = "Fuck you! - Key System", TextColor3 = color(state.TextColor),
-        TextSize = 15, Font = FONT, TextXAlignment = Enum.TextXAlignment.Left,
+        TextSize = 15, Font = FONT, TextXAlignment = Enum.TextXAlignment.Center,
     })
     local close = create("TextButton", {
         Parent = top, Position = UDim2.new(1, -35, 0, 0), Size = UDim2.new(0, 35, 1, 0),
