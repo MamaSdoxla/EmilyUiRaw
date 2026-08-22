@@ -25,14 +25,14 @@
     },
     {
         "key": "none",
-        "robloxName": "WdymGaming",
-        "group": "Coder",
+        "robloxName": "BombalMac",
+        "group": "Tester",
         "timeTillWorks": "inf"
     },
     {
-        "key": "none",
-        "robloxName": "BombalMac",
-        "group": "Tester",
+        "key": "1",
+        "robloxName": "WdymGaming",
+        "group": "Coder",
         "timeTillWorks": "inf"
     }
 ]
