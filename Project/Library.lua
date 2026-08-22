@@ -181,10 +181,10 @@ local function playUnlockJingle()
     pcall(function()
         local sound = create("Sound", {
             Name = "FuckYouUnlockSound", SoundId = "rbxassetid://115440201770223",
-            Volume = 1, Parent = game:GetService("SoundService"),
+            Volume = 5, Parent = game:GetService("SoundService"),
         })
         sound:Play()
-        task.delay(2.5, function() if sound.Parent then sound:Destroy() end end)
+        task.delay(3, function() if sound.Parent then sound:Destroy() end end)
     end)
 end
 
