@@ -22,7 +22,7 @@ local currentToggleKey = Enum.KeyCode.P
 local isHidden = false
 local isCollapsed = false
 local unlocked = false
-local cachedKeyResponse = currentKeyData and currentKeyData or { group = "Free", daysLeft = "Infinity" }
+local cachedKeyResponse = nil
 
 local uiColor_MainWindow = COL_BG
 local uiColor_TopBar = COL_BG
