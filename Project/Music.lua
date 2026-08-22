@@ -1,6 +1,7 @@
 --// Music.lua
 return function(Library, ui)
     local create = Library.create
+    local themeElements = Library.themeElements -- ИСПРАВЛЕНИЕ
     local SoundService = game:GetService("SoundService")
     local RunService = game:GetService("RunService")
     local HttpService = game:GetService("HttpService")
@@ -50,7 +51,6 @@ return function(Library, ui)
         end
     end
 
-    -- ВАЖНО: Ограничение в 2 секунды, как в оригинале
     local function makeMusicSound(id)
         local s = create("Sound", {Parent = game:GetService("CoreGui"), Name = "Music", SoundId = "rbxassetid://" .. (id or "1"), Looped = true, PlaybackSpeed = 1, Volume = 1})
         local conn; conn = RunService.Heartbeat:Connect(function()

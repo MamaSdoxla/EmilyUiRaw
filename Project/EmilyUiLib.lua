@@ -2,6 +2,19 @@
 local Library = {}
 Library.BASE_URL = "https://raw.githubusercontent.com/MamaSdoxla/EmilyUiRaw/refs/heads/main/Project"
 
+-- ВАЖНО: Инициализируем таблицу напрямую в Library, чтобы все модули могли к ней обратиться
+Library.themeElements = { 
+    MainWindow = {}, 
+    TopBars = {}, 
+    SideBars = {}, 
+    Texts = {}, 
+    Buttons = {}, 
+    TextBoxes = {}, 
+    FillBars = {}, 
+    CustomButtons = {} 
+}
+local themeElements = Library.themeElements
+
 local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
 local StarterGui = game:GetService("StarterGui")
@@ -25,7 +38,6 @@ local currentToggleKey = Enum.KeyCode.P
 local unlocked = false
 local beta = false
 
-local themeElements = { MainWindow={}, TopBars={}, SideBars={}, Texts={}, Buttons={}, TextBoxes={}, FillBars={}, CustomButtons={} }
 local toggleRegistry = {}
 
 function Library.create(className, properties)
@@ -275,10 +287,6 @@ function Library.applyTheme()
     end
 end
 
-local function updateBlur()
-    -- stub, will be overridden or handled by main script
-end
-
 local SECRET_KEY = "XenoMeowEmilyUi11037"
 local b64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
 local function base64_decode(data)
@@ -441,7 +449,6 @@ function Library.refreshKL(force)
 end
 task.spawn(function() while true do task.wait(0.5); pcall(Library.refreshKL) end end)
 
---// Экспорт настроек для внешних модулей
 function Library.getColor(name)
     if name == "MainWindow" then return uiColor_MainWindow
     elseif name == "TopBar" then return uiColor_TopBar
@@ -475,7 +482,7 @@ function Library.setGuiOpacity(op) uiGuiOpacity = op end
 function Library.getImageOpacity() return uiImageOpacity end
 function Library.setImageOpacity(op) uiImageOpacity = op end
 function Library.getBlurSize() return uiBlurSize end
-function Library.setBlurSize(size) uiBlurSize = size; if typeof(updateBlur) == "function" then updateBlur() end end
+function Library.setBlurSize(size) uiBlurSize = size end
 
 local function getBackgroundFiles()
     local out = {}

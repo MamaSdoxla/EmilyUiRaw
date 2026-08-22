@@ -1,6 +1,7 @@
 --// Aim.lua
 return function(Library, ui)
     local create = Library.create
+    local themeElements = Library.themeElements -- ИСПРАВЛЕНИЕ
     local Players = game:GetService("Players")
     local RunService = game:GetService("RunService")
     local UserInputService = game:GetService("UserInputService")

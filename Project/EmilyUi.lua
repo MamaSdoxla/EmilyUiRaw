@@ -1,6 +1,14 @@
 --// EmilyUi.lua
 return function(Library)
     local create = Library.create
+    local themeElements = Library.themeElements -- ГАРАНТИРОВАННО ПОЛУЧАЕМ ТАБЛИЦУ ИЗ БИБЛИОТЕКИ
+    
+    -- ЗАЩИТНАЯ ПРОВЕРКА: если вы видите это предупреждение в консоли, значит EmilyUiLib.lua не обновился на GitHub!
+    if not themeElements then
+        warn("КРИТИЧЕСКАЯ ОШИБКА: Library.themeElements равен nil! Проверьте, что вы заменили EmilyUiLib.lua на GitHub.")
+        return
+    end
+
     local Players = game:GetService("Players")
     local LocalPlayer = Players.LocalPlayer
     local HttpService = game:GetService("HttpService")
@@ -311,7 +319,7 @@ return function(Library)
         
         -- Профиль
         local UserProfilePanel = create("Frame", {Name = "UserProfilePanel", Parent = tabMain, Size = UDim2.new(1, 0, 0, 60), LayoutOrder = -1, BackgroundColor3 = Library.getColor("SideBar"), BorderColor3 = COL_BORDER})
-        table.insert(themeElements.SideBars, UserProfilePanel)
+        table.insert(themeElements.SideBars, UserProfilePanel) -- ТЕПЕРЬ ЭТО РАБОТАЕТ БЕЗ ОШИБОК
         create("ImageLabel", {Parent = UserProfilePanel, Position = UDim2.new(0, 10, 0, 10), Size = UDim2.new(0, 40, 0, 40), BackgroundTransparency = 1, Image = "rbxthumb://type=AvatarHeadShot&id=" .. LocalPlayer.UserId .. "&w=150&h=150"})
         create("TextLabel", {Parent = UserProfilePanel, Position = UDim2.new(0, 60, 0, 6), Size = UDim2.new(1, -70, 0, 16), BackgroundTransparency = 1, Text = LocalPlayer.DisplayName, TextColor3 = Color3.fromRGB(255, 255, 255), TextSize = 13, Font = FONT, TextXAlignment = Enum.TextXAlignment.Left})
         local UserKeyTimeLabel = create("TextLabel", {Parent = UserProfilePanel, Position = UDim2.new(0, 60, 0, 22), Size = UDim2.new(1, -70, 0, 14), BackgroundTransparency = 1, Text = "Days left: " .. tostring(daysLeft), TextColor3 = Color3.fromRGB(180, 180, 180), TextSize = 12, Font = FONT, TextXAlignment = Enum.TextXAlignment.Left})
