@@ -639,33 +639,69 @@ local function createKeyWindow()
 
     local function checkKeySystem()
         if not cachedKeyResponse then
-            local success, response = pcall(function() return game:HttpGet("https://raw.githubusercontent.com/MamaSdoxla/EmilyUi/refs/heads/main/nuh-uh.json") end)
-            if not success then KeyInfoLabel.Text = "Error: Failed to fetch database!"; return end
-            local ok, decryptedText = pcall(function() return xor_decrypt(base64_decode(response), SECRET_KEY) end)
-            if not ok then KeyInfoLabel.Text = "Error: Failed to decrypt!"; return end
-            cachedKeyResponse = decryptedText
-        end
+			task.wait(1) -- Add delay before first request
+			local success, response = pcall(function() 
+				return game:HttpGet("https://raw.githubusercontent.com/MamaSdoxla/EmilyUi/refs/heads/main/nuh-uh.json") 
+			end)
+			if not success then 
+				KeyInfoLabel.Text = "Error: Failed to fetch database!"
+				return 
+			end
+			task.wait(0.5) -- Add delay after request
+			local ok, decryptedText = pcall(function() 
+				return xor_decrypt(base64_decode(response), SECRET_KEY) 
+			end)
+			if not ok then 
+				KeyInfoLabel.Text = "Error: Failed to decrypt!"
+				return 
+			end
+			cachedKeyResponse = decryptedText
+		end
         
-        local jsonSuccess, keysList = pcall(function() return HttpService:JSONDecode(cachedKeyResponse) end)
-        if not jsonSuccess then KeyInfoLabel.Text = "Error: Database parsing failed!"; return end
+        local jsonSuccess, keysList = pcall(function() 
+			if type(cachedKeyResponse) ~= "string" then
+				error("cachedKeyResponse is not a string: " .. typeof(cachedKeyResponse))
+			end
+			return HttpService:JSONDecode(cachedKeyResponse) 
+		end)
+
+		if not jsonSuccess then 
+			warn("JSON Decode Error: " .. tostring(keysList))
+			KeyInfoLabel.Text = "Error: Invalid key database format!"
+			return 
+		end
+
+		if type(keysList) ~= "table" then
+			warn("keysList is not a table: " .. typeof(keysList))
+			KeyInfoLabel.Text = "Error: Database structure invalid!"
+			return
+		end
         
         local myName = string.lower(LocalPlayer.Name)
         local enteredKey = KeyTextBox.Text
         for _, data in ipairs(keysList) do
-            if data.key and data.robloxName and data.group and data.timeTillWorks then
-                local nameMatch = (data.robloxName == "none") or (string.lower(data.robloxName) == myName)
-                local groupAllowed = string.lower(data.group) == "free" or string.lower(data.group) == "user" or string.lower(data.group) == "tester" or string.lower(data.group) == "coder"
-                if nameMatch and groupAllowed then
-                    local daysLeft = getKeyDaysLeft(data.timeTillWorks)
-                    if daysLeft == "Infinity" or (type(daysLeft) == "number" and daysLeft > 0) then
-                        if data.key == "none" or (enteredKey == data.key) then
-                            unlockScript(data.group, daysLeft)
-                            return
-                        end
-                    end
-                end
-            end
-        end
+			if data.key and data.robloxName and data.group and data.timeTillWorks then
+				-- Ensure these are strings
+				local groupName = tostring(data.group)
+				local robloxName = tostring(data.robloxName)
+        
+				local nameMatch = (robloxName == "none") or (string.lower(robloxName) == myName)
+				local groupAllowed = string.lower(groupName) == "free" or 
+									string.lower(groupName) == "user" or 
+									string.lower(groupName) == "tester" or 
+									string.lower(groupName) == "coder"
+			
+				if nameMatch and groupAllowed then
+					local daysLeft = getKeyDaysLeft(data.timeTillWorks)
+					if daysLeft == "Infinity" or (type(daysLeft) == "number" and daysLeft > 0) then
+						if data.key == "none" or (enteredKey == data.key) then
+							unlockScript(groupName, daysLeft)
+							return
+						end
+					end
+				end
+			end
+		end
         KeyInfoLabel.Text = "Enter key please! You can ask for a key in discord."
     end
 
