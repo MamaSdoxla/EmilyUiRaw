@@ -1,8 +1,8 @@
---// FuckYou UI Library v1.0
+--// FuckYou UI Library v1.1
 --// Modular UI Library based on FuckYou UI
 
 local Library = {
-    Version = "1.0.0",
+    Version = "1.1.0",
     Theme = {
         MainWindow = Color3.fromRGB(12, 12, 12),
         TopBar = Color3.fromRGB(22, 22, 22),
@@ -174,14 +174,37 @@ function Library:CreateSidebarButton(text, callback)
 end
 
 function Library:CreateTab(name)
-    local tabFrame = CreateInstance("ScrollingFrame", {Name = "Tab_" .. name, Parent = self.ContentArea, Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, BorderSizePixel = 0, ScrollBarThickness = 4, ScrollBarImageColor3 = self.Theme.Border, CanvasSize = UDim2.new(0, 0, 0, 0), Visible = false})
+    local tabFrame = CreateInstance("ScrollingFrame", {
+        Name = "Tab_" .. name,
+        Parent = self.ContentArea,
+        Size = UDim2.new(1, 0, 1, 0),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        ScrollBarThickness = 4,
+        ScrollBarImageColor3 = self.Theme.Border,
+        CanvasSize = UDim2.new(0, 0, 0, 0),
+        Visible = false
+    })
+    
     local layout = CreateInstance("UIListLayout", {Parent = tabFrame, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 6)})
     CreateInstance("UIPadding", {Parent = tabFrame, PaddingTop = UDim.new(0, 10), PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10)})
     layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function() tabFrame.CanvasSize = UDim2.new(0, 0, 0, layout.AbsoluteContentSize.Y + 20) end)
     
-    local btn = CreateInstance("TextButton", {Name = "Btn_" .. name, Parent = self.MenuSidebar, Size = UDim2.new(1, 0, 0, 30), LayoutOrder = #self.Tabs + 1, BackgroundColor3 = self.Theme.Button, BorderColor3 = self.Theme.Border, TextColor3 = self.Theme.Text, Text = name, Font = self.Font, TextSize = 12})
+    local btn = CreateInstance("TextButton", {
+        Name = "Btn_" .. name,
+        Parent = self.MenuSidebar,
+        Size = UDim2.new(1, 0, 0, 30),
+        LayoutOrder = #self.Tabs + 1,
+        BackgroundColor3 = self.Theme.Button,
+        BorderColor3 = self.Theme.Border,
+        TextColor3 = self.Theme.Text,
+        Text = name,
+        Font = self.Font,
+        TextSize = 12
+    })
     
-    btn.MouseButton1Click:Connect(function()
+    -- Выносим логику переключения в отдельную функцию
+    local function selectTab()
         for _, tab in ipairs(self.Tabs) do
             tab.Frame.Visible = false
             tab.Button.BackgroundColor3 = self.Theme.Button
@@ -191,11 +214,18 @@ function Library:CreateTab(name)
         btn.BackgroundColor3 = self.Theme.Button
         btn.TextColor3 = Color3.fromRGB(255, 255, 255)
         self.CurrentTab = tabFrame
-    end)
+    end
+
+    btn.MouseButton1Click:Connect(selectTab)
     
     local tabData = {Name = name, Frame = tabFrame, Button = btn, Elements = {}}
     table.insert(self.Tabs, tabData)
-    if #self.Tabs == 1 then btn.MouseButton1Click:Fire() end
+    
+    -- Показываем первую вкладку по умолчанию, вызывая функцию напрямую
+    if #self.Tabs == 1 then
+        selectTab()
+    end
+    
     return tabData
 end
 
@@ -360,5 +390,4 @@ function Library:CreateSettingsTab()
     return settingsTab
 end
 
--- ЭТО ДОЛЖНА БЫТЬ ПОСЛЕДНЯЯ СТРОКА В ФАЙЛЕ БИБЛИОТЕКИ
 return Library
