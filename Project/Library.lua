@@ -184,7 +184,7 @@ local function playUnlockJingle()
             Volume = 1, Parent = game:GetService("SoundService"),
         })
         sound:Play()
-        task.delay(2, function() if sound.Parent then sound:Destroy() end end)
+        task.delay(2.5, function() if sound.Parent then sound:Destroy() end end)
     end)
 end
 
