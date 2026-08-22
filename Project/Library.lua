@@ -1,8 +1,8 @@
---// FuckYou UI Library v1.1
+--// FuckYou UI Library v1.2
 --// Modular UI Library based on FuckYou UI
 
 local Library = {
-    Version = "1.1.0",
+    Version = "1.2.0",
     Theme = {
         MainWindow = Color3.fromRGB(12, 12, 12),
         TopBar = Color3.fromRGB(22, 22, 22),
@@ -86,7 +86,11 @@ function Library:CreateWindow(settings)
     
     local menuLayout = CreateInstance("UIListLayout", {Parent = self.MenuSidebar, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 4)})
     CreateInstance("UIPadding", {Parent = self.MenuSidebar, PaddingTop = UDim.new(0, 5), PaddingLeft = UDim.new(0, 5), PaddingRight = UDim.new(0, 5)})
-    menuLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function() self.MenuSidebar.CanvasSize = UDim2.new(0, 0, 0, menuLayout.AbsoluteContentSize.Y + 10) end)
+    
+    -- FIX: Используем menuLayout.AbsoluteContentSize вместо menuSidebar.AbsoluteContentSize
+    menuLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+        self.MenuSidebar.CanvasSize = UDim2.new(0, 0, 0, menuLayout.AbsoluteContentSize.Y + 10)
+    end)
     
     self.ContentArea = CreateInstance("Frame", {Name = "ContentArea", Parent = self.Window, Position = UDim2.new(0, 170, 0, 45), Size = UDim2.new(1, -170, 1, -45), BackgroundTransparency = 1, BorderSizePixel = 0})
     
@@ -188,7 +192,11 @@ function Library:CreateTab(name)
     
     local layout = CreateInstance("UIListLayout", {Parent = tabFrame, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 6)})
     CreateInstance("UIPadding", {Parent = tabFrame, PaddingTop = UDim.new(0, 10), PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10)})
-    layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function() tabFrame.CanvasSize = UDim2.new(0, 0, 0, layout.AbsoluteContentSize.Y + 20) end)
+    
+    -- FIX: Используем layout.AbsoluteContentSize
+    layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+        tabFrame.CanvasSize = UDim2.new(0, 0, 0, layout.AbsoluteContentSize.Y + 20)
+    end)
     
     local btn = CreateInstance("TextButton", {
         Name = "Btn_" .. name,
@@ -203,7 +211,6 @@ function Library:CreateTab(name)
         TextSize = 12
     })
     
-    -- Выносим логику переключения в отдельную функцию
     local function selectTab()
         for _, tab in ipairs(self.Tabs) do
             tab.Frame.Visible = false
@@ -221,7 +228,6 @@ function Library:CreateTab(name)
     local tabData = {Name = name, Frame = tabFrame, Button = btn, Elements = {}}
     table.insert(self.Tabs, tabData)
     
-    -- Показываем первую вкладку по умолчанию, вызывая функцию напрямую
     if #self.Tabs == 1 then
         selectTab()
     end
@@ -312,24 +318,88 @@ function Library:CreateToggle(tab, labelText, default, callback)
 end
 
 function Library:CreateDropdown(tab, labelText, options, default, callback)
-    local container = CreateInstance("Frame", {Size = UDim2.new(1, 0, 0, 36), BackgroundTransparency = 1, Parent = tab.Frame})
-    CreateInstance("TextLabel", {Size = UDim2.new(0.45, 0, 1, 0), BackgroundTransparency = 1, Text = labelText, TextColor3 = self.Theme.Text, TextSize = 13, Font = self.Font, TextXAlignment = Enum.TextXAlignment.Left, Parent = container})
-    local currentValue = default or options[1]
-    local btn = CreateInstance("TextButton", {Size = UDim2.new(0.5, 0, 0, 28), Position = UDim2.new(0.48, 0, 0.1, 0), BackgroundColor3 = self.Theme.Button, BorderColor3 = self.Theme.Border, TextColor3 = self.Theme.Text, Text = labelText .. ": " .. currentValue, Font = self.Font, TextSize = 12, Parent = container})
-    local list = CreateInstance("ScrollingFrame", {Parent = container, Size = UDim2.new(0.5, 0, 0, 110), Position = UDim2.new(0.48, 0, 0.95, 0), BackgroundColor3 = self.Theme.TextBox, BorderColor3 = self.Theme.Border, ScrollBarThickness = 4, CanvasSize = UDim2.new(0, 0, 0, 0), Visible = false, ZIndex = 25})
-    CreateInstance("UIListLayout", {Parent = list, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 2)})
+    local container = CreateInstance("Frame", {
+        Size = UDim2.new(1, 0, 0, 36),
+        BackgroundTransparency = 1,
+        Parent = tab.Frame
+    })
     
-    btn.MouseButton1Click:Connect(function() list.Visible = not list.Visible end)
+    local label = CreateInstance("TextLabel", {
+        Size = UDim2.new(0.45, 0, 1, 0),
+        BackgroundTransparency = 1,
+        Text = labelText,
+        TextColor3 = self.Theme.Text,
+        TextSize = 13,
+        Font = self.Font,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Parent = container
+    })
+    
+    local currentValue = default or options[1]
+    
+    local btn = CreateInstance("TextButton", {
+        Size = UDim2.new(0.5, 0, 0, 28),
+        Position = UDim2.new(0.48, 0, 0.1, 0),
+        BackgroundColor3 = self.Theme.Button,
+        BorderColor3 = self.Theme.Border,
+        TextColor3 = self.Theme.Text,
+        Text = labelText .. ": " .. currentValue,
+        Font = self.Font,
+        TextSize = 12,
+        Parent = container
+    })
+    
+    local list = CreateInstance("ScrollingFrame", {
+        Parent = container,
+        Size = UDim2.new(0.5, 0, 0, 110),
+        Position = UDim2.new(0.48, 0, 0.95, 0),
+        BackgroundColor3 = self.Theme.TextBox,
+        BorderColor3 = self.Theme.Border,
+        ScrollBarThickness = 4,
+        CanvasSize = UDim2.new(0, 0, 0, 0),
+        Visible = false,
+        ZIndex = 25
+    })
+    
+    -- FIX: Сохраняем layout в переменную для корректного отслеживания AbsoluteContentSize
+    local layout = CreateInstance("UIListLayout", {
+        Parent = list,
+        SortOrder = Enum.SortOrder.LayoutOrder,
+        Padding = UDim.new(0, 2)
+    })
+    
+    btn.MouseButton1Click:Connect(function()
+        list.Visible = not list.Visible
+    end)
+    
     for _, opt in ipairs(options) do
-        local optBtn = CreateInstance("TextButton", {Size = UDim2.new(1, -4, 0, 24), BackgroundColor3 = self.Theme.Button, BorderColor3 = self.Theme.Border, TextColor3 = self.Theme.Text, Text = opt, Font = self.Font, TextSize = 12, ZIndex = 26, Parent = list})
+        local optBtn = CreateInstance("TextButton", {
+            Size = UDim2.new(1, -4, 0, 24),
+            BackgroundColor3 = self.Theme.Button,
+            BorderColor3 = self.Theme.Border,
+            TextColor3 = self.Theme.Text,
+            Text = opt,
+            Font = self.Font,
+            TextSize = 12,
+            ZIndex = 26,
+            Parent = list
+        })
+        
         optBtn.MouseButton1Click:Connect(function()
             currentValue = opt
             btn.Text = labelText .. ": " .. opt
             list.Visible = false
-            if callback then callback(opt) end
+            if callback then
+                callback(opt)
+            end
         end)
     end
-    list:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function() list.CanvasSize = UDim2.new(0, 0, 0, list.AbsoluteContentSize.Y + 4) end)
+    
+    -- FIX: Используем layout.AbsoluteContentSize вместо list.AbsoluteContentSize
+    layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+        list.CanvasSize = UDim2.new(0, 0, 0, layout.AbsoluteContentSize.Y + 4)
+    end)
+    
     table.insert(tab.Elements, container)
     return container
 end
