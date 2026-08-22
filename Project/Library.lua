@@ -410,6 +410,45 @@ function Library:Init()
     
     createSlider(tabFrames.Settings, "Gui Opacity", 25, 100, function() return math.floor(uiGuiOpacity * 100) end, function(v) uiGuiOpacity = v / 100; applyTheme() end, function(v) return v .. "%" end)
 
+	--// Color Customization
+    createSection(tabFrames.Settings, "Colors")
+    
+    local function createColorInput(labelText, currentColor, onChanged)
+        local container = create("Frame", {Size = UDim2.new(1, 0, 0, 36), BackgroundTransparency = 1, Parent = tabFrames.Settings})
+        create("TextLabel", {Size = UDim2.new(0.45, 0, 1, 0), BackgroundTransparency = 1, Text = labelText, TextColor3 = uiColor_TextColor, TextSize = 13, Font = FONT, TextXAlignment = Enum.TextXAlignment.Left, Parent = container})
+        
+        local box = createTextBox(container, string.format("%d, %d, %d", math.floor(currentColor.R * 255), math.floor(currentColor.G * 255), math.floor(currentColor.B * 255)), FONT)
+        box.Size = UDim2.new(0.5, 0, 0.8, 0)
+        box.Position = UDim2.new(0.48, 0, 0.1, 0)
+        box.TextSize = 12
+        
+        box.FocusLost:Connect(function(enterPressed)
+            if enterPressed then
+                local r, g, b = box.Text:match("(%d+)%s*,%s*(%d+)%s*,%s*(%d+)")
+                if r and g and b then
+                    local color = Color3.fromRGB(
+                        math.clamp(tonumber(r), 0, 255),
+                        math.clamp(tonumber(g), 0, 255),
+                        math.clamp(tonumber(b), 0, 255)
+                    )
+                    onChanged(color)
+                    applyTheme()
+                else
+                    box.Text = "Invalid!"
+                end
+            end
+        end)
+        
+        return container
+    end
+    
+    createColorInput("Main Window Color:", uiColor_MainWindow, function(c) uiColor_MainWindow = c end)
+    createColorInput("Top Bar Color:", uiColor_TopBar, function(c) uiColor_TopBar = c end)
+    createColorInput("Side Bar Color:", uiColor_SideBar, function(c) uiColor_SideBar = c end)
+    createColorInput("Text Color:", uiColor_TextColor, function(c) uiColor_TextColor = c end)
+    createColorInput("Button Color:", uiColor_ButtonColor, function(c) uiColor_ButtonColor = c end)
+    createColorInput("TextBox Color:", uiColor_TextBoxColor, function(c) uiColor_TextBoxColor = c end)
+
     -- FIXED: Added Configs Dropdown and Refresh
     createSection(tabFrames.Settings, "Configs")
     local configNameBox = createTextBox(tabFrames.Settings, "Config name...", FONT)
