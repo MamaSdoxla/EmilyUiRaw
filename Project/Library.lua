@@ -240,12 +240,27 @@ function Library:Init()
     end
 
     EmilyUi.MouseButton1Click:Connect(function()
-        MenuInsided.Visible = not MenuInsided.Visible
-        if MenuInsided.Visible then
-            for _, tab in ipairs(tabs) do tab.Button.Visible = true end
-            switchTab(tabs[1])
-        end
-    end)
+		MenuInsided.Visible = not MenuInsided.Visible
+		if MenuInsided.Visible then
+			-- Показываем все кнопки подвкладок
+			for _, tab in ipairs(tabs) do
+				if tab.Button then
+					tab.Button.Visible = true
+				end
+			end
+			-- Открываем первую вкладку по умолчанию
+			if tabs[1] then
+				switchTab(tabs[1])
+			end
+		else
+			-- Скрываем все подвкладки
+			for _, tab in ipairs(tabs) do
+				if tab.Frame then
+					tab.Frame.Visible = false
+				end
+			end
+		end
+	end)
 
     --// UI Helpers
     local function createSection(parent, text)
